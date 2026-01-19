@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CellarCount 2026 - Vinlager Optælling</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🍷 CellarCount 2026</h1>
+    <nav>
+      <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+      <button class="nav-btn" data-page="lager">Lager</button>
+      <button class="nav-btn" data-page="optælling">Optælling</button>
+      <button class="nav-btn" data-page="import">Import</button>
+      <button class="nav-btn" data-page="labels">Labels</button>
+      <button class="nav-btn" data-page="rapporter">Rapporter</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Dashboard -->
+    <section id="dashboard" class="page active">
+      <div class="card">
+        <h2>Dashboard</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Antal vine</div>
+            <div class="stat-value" id="stat-ant-vine">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Samlet lagerværdi</div>
+            <div class="stat-value" id="stat-værdi">0 kr.</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Lavt lager</div>
+            <div class="stat-value warning" id="stat-lavt">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lager -->
+    <section id="lager" class="page">
+      <div class="card">
+        <h2>Lageroversigt</h2>
+        <div class="filter-bar">
+          <select id="filter-reol">
+            <option value="">Alle reoler</option>
+          </select>
+          <select id="filter-hylde">
+            <option value="">Alle hylder</option>
+          </select>
+          <button class="btn-secondary" onclick="applyFilter()">Filtrer</button>
+          <button class="btn-secondary" onclick="clearFilter()">Ryd</button>
+        </div>
+        <div class="table-container">
+          <table id="lager-table">
+            <thead>
+              <tr>
+                <th>QR-kode</th>
+                <th>Navn</th>
+                <th>Type</th>
+                <th>Land</th>
+                <th>Region</th>
+                <th>Årgang</th>
+                <th>Reol</th>
+                <th>Hylde</th>
+                <th class="text-right">Antal</th>
+                <th class="text-right">Min.</th>
+                <th class="text-right">Pris</th>
+              </tr>
+            </thead>
+            <tbody id="lager-tbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Optælling -->
+    <section id="optælling" class="page">
+      <div class="card">
+        <h2>QR-kode Optælling</h2>
+        <div class="scan-container">
+          <div class="scan-section">
+            <label>Scan eller indtast QR-kode (VIN-ID):</label>
+            <input type="text" id="scan-input" placeholder="VIN-0001" autofocus>
+            <button class="btn-primary" onclick="scanQR()">Søg vin</button>
+          </div>
+
+          <div id="wine-details" class="wine-details" style="display: none;">
+            <h3 id="wine-navn"></h3>
+            <div class="wine-info">
+              <div><strong>VIN-ID:</strong> <span id="wine-vinId"></span></div>
+              <div><strong>Type:</strong> <span id="wine-type"></span></div>
+              <div><strong>Land:</strong> <span id="wine-land"></span></div>
+              <div><strong>Region:</strong> <span id="wine-region"></span></div>
+              <div><strong>Årgang:</strong> <span id="wine-årgang"></span></div>
+              <div><strong>Reol:</strong> <span id="wine-reol"></span> | <strong>Hylde:</strong> <span id="wine-hylde"></span></div>
+              <div><strong>Nuværende antal:</strong> <span id="wine-antal" class="big-number"></span></div>
+              <div id="wine-billede-container"></div>
+            </div>
+
+            <div class="count-controls">
+              <h4>Opdater antal:</h4>
+              <div class="count-buttons">
+                <button class="btn-count" onclick="updateCount(-1)">-1</button>
+                <button class="btn-count" onclick="updateCount(-5)">-5</button>
+                <input type="number" id="count-input" placeholder="Direkte antal" style="width: 150px; padding: 10px;">
+                <button class="btn-count" onclick="updateCount(5)">+5</button>
+                <button class="btn-count" onclick="updateCount(1)">+1</button>
+              </div>
+              <button class="btn-primary" onclick="saveCount()">Gem antal</button>
+              <div id="count-status"></div>
+            </div>
+          </div>
+
+          <div id="scan-error" class="error-message" style="display: none;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Import -->
+    <section id="import" class="page">
+      <div class="card">
+        <h2>Import CSV/Excel</h2>
+        <div class="import-section">
+          <p>Vælg import-mode:</p>
+          <div class="radio-group">
+            <label><input type="radio" name="import-mode" value="overskriv" checked> Overskriv hele lageret</label>
+            <label><input type="radio" name="import-mode" value="tilføj"> Tilføj nye vine (spring eksisterende over)</label>
+            <label><input type="radio" name="import-mode" value="opdater"> Opdatér eksisterende vine</label>
+          </div>
+
+          <div class="file-upload">
+            <label for="file-input" class="file-label">
+              <span>Vælg CSV eller Excel fil</span>
+              <input type="file" id="file-input" accept=".csv,.xlsx,.xls" style="display: none;">
+            </label>
+            <span id="file-name"></span>
+          </div>
+
+          <button class="btn-primary" onclick="doImport()">Start import</button>
+
+          <div id="import-results" style="display: none;">
+            <h3>Import resultat:</h3>
+            <div id="import-results-content"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Labels -->
+    <section id="labels" class="page">
+      <div class="card">
+        <h2>Print Labels</h2>
+        <div class="filter-bar">
+          <select id="label-reol">
+            <option value="">Alle reoler</option>
+          </select>
+          <select id="label-hylde">
+            <option value="">Alle hylder</option>
+          </select>
+          <button class="btn-secondary" onclick="generateLabels()">Generer labels</button>
+        </div>
+        <div id="labels-container" class="labels-container"></div>
+      </div>
+    </section>
+
+    <!-- Rapporter -->
+    <section id="rapporter" class="page">
+      <div class="card">
+        <h2>Rapporter</h2>
+        <div class="reports-section">
+          <button class="btn-primary" onclick="generateLagerReport()">Lagerrapport (PDF)</button>
+          <button class="btn-primary" onclick="generateVærdiReport()">Værdirapport (PDF)</button>
+          <div id="report-content" style="margin-top: 20px;"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
