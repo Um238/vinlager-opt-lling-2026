@@ -1,0 +1,66 @@
+vinId;varenummer;navn;type;kategori;land;region;drue;årgang;reol;hylde;antal;minAntal;indkøbspris
+VIN-0001;W001;Château Margaux;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2018;A;1;12;6;2899.00
+VIN-0002;W002;Domaine de la Romanée-Conti;Rødvin;Rødvin;Frankrig;Bourgogne;Pinot Noir;2019;A;1;6;3;18999.00
+VIN-0003;W003;Château Mouton Rothschild;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2017;A;2;24;12;4499.00
+VIN-0004;W004;Château Latour;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2016;A;2;18;9;3999.00
+VIN-0005;W005;Château Cheval Blanc;Rødvin;Rødvin;Frankrig;Bordeaux;Merlot;2018;A;3;15;8;5299.00
+VIN-0006;W006;Château d'Yquem;Dessertvin;Dessertvin;Frankrig;Bordeaux;Sémillon;2017;A;3;6;3;3499.00
+VIN-0007;W007;Dom Pérignon;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2015;A;4;12;6;1299.00
+VIN-0008;W008;Krug Grande Cuvée;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2016;A;4;9;5;1699.00
+VIN-0009;W009;Sassicaia;Rødvin;Rødvin;Italien;Toscana;Cabernet Sauvignon;2019;B;1;18;9;2499.00
+VIN-0010;W010;Ornellaia;Rødvin;Rødvin;Italien;Toscana;Cabernet Sauvignon;2018;B;1;15;8;2299.00
+VIN-0011;W011;Masseto;Rødvin;Rødvin;Italien;Toscana;Merlot;2017;B;2;12;6;4499.00
+VIN-0012;W012;Barolo Gaja;Rødvin;Rødvin;Italien;Piemont;Nebbiolo;2018;B;2;20;10;1799.00
+VIN-0013;W013;Brunello di Montalcino;Rødvin;Rødvin;Italien;Toscana;Sangiovese;2017;B;3;24;12;899.00
+VIN-0014;W014;Amarone della Valpolicella;Rødvin;Rødvin;Italien;Veneto;Corvina;2018;B;3;16;8;1199.00
+VIN-0015;W015;Chianti Classico;Rødvin;Rødvin;Italien;Toscana;Sangiovese;2020;B;4;30;15;349.00
+VIN-0016;W016;Vega Sicilia Unico;Rødvin;Rødvin;Spanien;Ribera del Duero;Tempranillo;2015;C;1;8;4;3499.00
+VIN-0017;W017;Marqués de Riscal Reserva;Rødvin;Rødvin;Spanien;Rioja;Tempranillo;2017;C;1;18;9;599.00
+VIN-0018;W018;La Rioja Alta Gran Reserva;Rødvin;Rødvin;Spanien;Rioja;Tempranillo;2015;C;2;15;8;799.00
+VIN-0019;W019;Priorat;Rødvin;Rødvin;Spanien;Priorat;Garnacha;2019;C;2;12;6;899.00
+VIN-0020;W020;Rías Baixas Albariño;Hvidvin;Hvidvin;Spanien;Galicien;Albariño;2021;C;3;20;10;349.00
+VIN-0021;W021;Opus One;Rødvin;Rødvin;USA;Napa Valley;Cabernet Sauvignon;2018;D;1;10;5;2499.00
+VIN-0022;W022;Caymus Cabernet Sauvignon;Rødvin;Rødvin;USA;Napa Valley;Cabernet Sauvignon;2019;D;1;16;8;899.00
+VIN-0023;W023;Domaine Serene Pinot Noir;Rødvin;Rødvin;USA;Oregon;Pinot Noir;2020;D;2;14;7;699.00
+VIN-0024;W024;Screaming Eagle;Rødvin;Rødvin;USA;Napa Valley;Cabernet Sauvignon;2017;D;2;3;2;34999.00
+VIN-0025;W025;Chardonnay Kistler;Hvidvin;Hvidvin;USA;Sonoma;Chardonnay;2020;D;3;12;6;1199.00
+VIN-0026;W026;Grgich Hills Chardonnay;Hvidvin;Hvidvin;USA;Napa Valley;Chardonnay;2019;D;3;15;8;799.00
+VIN-0027;W027;Penfolds Grange;Rødvin;Rødvin;Australien;South Australia;Shiraz;2017;E;1;6;3;2999.00
+VIN-0028;W028;Henschke Hill of Grace;Rødvin;Rødvin;Australien;South Australia;Shiraz;2016;E;1;8;4;3499.00
+VIN-0029;W029;Cloudy Bay Sauvignon Blanc;Hvidvin;Hvidvin;New Zealand;Marlborough;Sauvignon Blanc;2022;E;2;24;12;349.00
+VIN-0030;W030;Felton Road Pinot Noir;Rødvin;Rødvin;New Zealand;Central Otago;Pinot Noir;2020;E;2;16;8;599.00
+VIN-0031;W031;Weingut Egon Müller Scharzhofberger;Hvidvin;Hvidvin;Tyskland;Mosel;Riesling;2020;F;1;12;6;799.00
+VIN-0032;W032;Dr. Loosen Riesling;Hvidvin;Hvidvin;Tyskland;Mosel;Riesling;2021;F;1;18;9;299.00
+VIN-0033;W033;Georges Duboeuf Beaujolais;Rødvin;Rødvin;Frankrig;Beaujolais;Gamay;2022;F;2;30;15;149.00
+VIN-0034;W034;Château Neuf du Pape;Rødvin;Rødvin;Frankrig;Rhône;Grenache;2019;F;2;20;10;499.00
+VIN-0035;W035;Côte-Rôtie;Rødvin;Rødvin;Frankrig;Rhône;Syrah;2018;F;3;14;7;899.00
+VIN-0036;W036;Condrieu;Hvidvin;Hvidvin;Frankrig;Rhône;Viognier;2020;F;3;12;6;699.00
+VIN-0037;W037;Chablis Grand Cru;Hvidvin;Hvidvin;Frankrig;Bourgogne;Chardonnay;2019;G;1;10;5;1299.00
+VIN-0038;W038;Puligny-Montrachet;Hvidvin;Hvidvin;Frankrig;Bourgogne;Chardonnay;2020;G;1;12;6;1499.00
+VIN-0039;W039;Meursault;Hvidvin;Hvidvin;Frankrig;Bourgogne;Chardonnay;2019;G;2;14;7;1199.00
+VIN-0040;W040;Champagne Bollinger;Mousserende;Mousserende;Frankrig;Champagne;Pinot Noir;2017;G;2;16;8;899.00
+VIN-0041;W041;Veuve Clicquot;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2018;G;3;20;10;649.00
+VIN-0042;W042;Moët & Chandon;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2019;G;3;24;12;499.00
+VIN-0043;W043;Château Lafite Rothschild;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2016;H;1;9;5;8999.00
+VIN-0044;W044;Petrus;Rødvin;Rødvin;Frankrig;Bordeaux;Merlot;2018;H;1;3;2;49999.00
+VIN-0045;W045;Château Haut-Brion;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2017;H;2;12;6;5499.00
+VIN-0046;W046;Château Palmer;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2018;H;2;15;8;2999.00
+VIN-0047;W047;Château Pichon Longueville;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2019;H;3;18;9;1199.00
+VIN-0048;W048;Château Ducru-Beaucaillou;Rødvin;Rødvin;Frankrig;Bordeaux;Cabernet Sauvignon;2017;H;3;16;8;2499.00
+VIN-0049;W049;Porto Vintage;Forstærket vin;Forstærket vin;Portugal;Douro;Touriga Nacional;2018;I;1;8;4;899.00
+VIN-0050;W050;Taylor's Port;Forstærket vin;Forstærket vin;Portugal;Douro;Touriga Nacional;2019;I;1;12;6;699.00
+VIN-0051;W051;Sauternes Château d'Yquem;Dessertvin;Dessertvin;Frankrig;Bordeaux;Sémillon;2018;I;2;6;3;4299.00
+VIN-0052;W052;Tokaji Aszú;Dessertvin;Dessertvin;Ungarn;Tokaj;Furmint;2017;I;2;9;5;1299.00
+VIN-0053;W053;Champagne Taittinger;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2018;I;3;14;7;749.00
+VIN-0054;W054;Laurent-Perrier;Mousserende;Mousserende;Frankrig;Champagne;Chardonnay;2019;I;3;16;8;599.00
+VIN-0055;W055;Barolo Giacomo Conterno;Rødvin;Rødvin;Italien;Piemont;Nebbiolo;2017;J;1;10;5;2299.00
+VIN-0056;W056;Barbaresco Gaja;Rødvin;Rødvin;Italien;Piemont;Nebbiolo;2018;J;1;12;6;1499.00
+VIN-0057;W057;Super Tuscan Tignanello;Rødvin;Rødvin;Italien;Toscana;Sangiovese;2019;J;2;14;7;1199.00
+VIN-0058;W058;Chianti Riserva;Rødvin;Rødvin;Italien;Toscana;Sangiovese;2018;J;2;20;10;449.00
+VIN-0059;W059;Prosecco;Mousserende;Mousserende;Italien;Veneto;Glera;2022;J;3;30;15;199.00
+VIN-0060;W060;Pinot Grigio;Hvidvin;Hvidvin;Italien;Veneto;Pinot Grigio;2022;J;3;24;12;249.00
+VIN-0061;W061;Rosé de Provence;Rosé;Rosé;Frankrig;Provence;Grenache;2022;K;1;20;10;299.00
+VIN-0062;W062;Whispering Angel;Rosé;Rosé;Frankrig;Provence;Grenache;2022;K;1;16;8;399.00
+VIN-0063;W063;Champagne Rosé;Rosé;Rosé;Frankrig;Champagne;Pinot Noir;2019;K;2;10;5;899.00
+VIN-0064;W064;Gavi di Gavi;Hvidvin;Hvidvin;Italien;Piemont;Cortese;2021;K;2;18;9;349.00
+VIN-0065;W065;Vermentino;Hvidvin;Hvidvin;Italien;Sardegna;Vermentino;2022;K;3;14;7;279.00
