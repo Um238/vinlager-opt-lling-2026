@@ -1,0 +1,37 @@
+# Node modules
+node_modules/
+backend/node_modules/
+
+# Environment variables
+backend/.env
+.env
+*.env
+
+# Database files
+backend/data/*.db
+backend/data/*.db-journal
+*.db
+*.db-journal
+
+# Uploaded images (men beholde mappen struktur)
+backend/uploads/images/*
+!backend/uploads/images/.gitkeep
+
+# Temp import files
+backend/uploads/temp/*
+!backend/uploads/temp/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
