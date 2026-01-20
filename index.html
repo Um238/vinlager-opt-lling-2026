@@ -4,10 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CellarCount 2026 - Vinlager Optælling</title>
-  <link rel="stylesheet" href="styles.css">
+      <link rel="stylesheet" href="styles.css?v=18">
+      <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+      <meta http-equiv="Pragma" content="no-cache">
+      <meta http-equiv="Expires" content="0">
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
   <header>
@@ -28,7 +33,7 @@
       <div class="card">
         <h2>Dashboard</h2>
         <div class="stats-grid">
-          <div class="stat-card">
+          <div class="stat-card clickable" onclick="showVineOversigt('alle')">
             <div class="stat-label">Antal vine</div>
             <div class="stat-value" id="stat-ant-vine">0</div>
           </div>
@@ -36,7 +41,7 @@
             <div class="stat-label">Samlet lagerværdi</div>
             <div class="stat-value" id="stat-værdi">0 kr.</div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card clickable" onclick="showVineOversigt('lavt')">
             <div class="stat-label">Lavt lager</div>
             <div class="stat-value warning" id="stat-lavt">0</div>
           </div>
@@ -62,7 +67,7 @@
           <table id="lager-table">
             <thead>
               <tr>
-                <th>QR-kode</th>
+                <th>Varenummer</th>
                 <th>Navn</th>
                 <th>Type</th>
                 <th>Land</th>
@@ -73,6 +78,7 @@
                 <th class="text-right">Antal</th>
                 <th class="text-right">Min.</th>
                 <th class="text-right">Pris</th>
+                <th>Billede</th>
               </tr>
             </thead>
             <tbody id="lager-tbody">
@@ -88,9 +94,15 @@
         <h2>QR-kode Optælling</h2>
         <div class="scan-container">
           <div class="scan-section">
-            <label>Scan eller indtast QR-kode (VIN-ID):</label>
-            <input type="text" id="scan-input" placeholder="VIN-0001" autofocus>
+            <label>Scan eller indtast QR-kode (VIN-ID eller Varenummer):</label>
+            <div style="position: relative;">
+              <input type="text" id="scan-input" placeholder="VIN-0001 eller W001" autofocus>
+              <div id="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 2px;"></div>
+            </div>
             <button class="btn-primary" onclick="scanQR()">Søg vin</button>
+            <button class="btn-secondary" id="start-camera-btn" onclick="startQRScanner()" style="margin-left: 10px;">📷 Start kamera scanner</button>
+            <video id="qr-video" style="width: 100%; max-width: 400px; display: none; margin-top: 10px;"></video>
+            <canvas id="qr-canvas" style="display: none;"></canvas>
           </div>
 
           <div id="wine-details" class="wine-details" style="display: none;">
@@ -158,7 +170,7 @@
     <!-- Labels -->
     <section id="labels" class="page">
       <div class="card">
-        <h2>Print Labels</h2>
+        <h2 class="sticky-header">Print Labels</h2>
         <div class="filter-bar">
           <select id="label-reol">
             <option value="">Alle reoler</option>
@@ -167,6 +179,7 @@
             <option value="">Alle hylder</option>
           </select>
           <button class="btn-secondary" onclick="generateLabels()">Generer labels</button>
+          <button class="btn-print" onclick="printLabels()">🖨️ Print labels</button>
         </div>
         <div id="labels-container" class="labels-container"></div>
       </div>
@@ -176,16 +189,122 @@
     <section id="rapporter" class="page">
       <div class="card">
         <h2>Rapporter</h2>
-        <div class="reports-section">
-          <button class="btn-primary" onclick="generateLagerReport()">Lagerrapport (PDF)</button>
+        <p style="color: #666; margin-bottom: 1rem;">Se og administrer rapporter og arkiverede rapporter.</p>
+        
+        <!-- Filtre -->
+        <div class="filter-bar" style="margin-bottom: 1rem;">
+          <label style="margin-right: 1rem;">
+            <strong>Vælg periode:</strong>
+            <select id="report-period" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="all">Alle Rapporter</option>
+              <option value="today">I dag</option>
+              <option value="week">Sidste uge</option>
+              <option value="thisMonth">Denne måned</option>
+              <option value="lastMonth">Sidste måned</option>
+            </select>
+          </label>
+          <label style="margin-right: 1rem;">
+            <strong>Vælg lokation:</strong>
+            <select id="report-location" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="all">Alle</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- Generer nye rapporter -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+          <h3 style="margin-bottom: 0.5rem;">Generer ny rapport:</h3>
+          <button class="btn-primary" onclick="generateLagerReport()" style="margin-right: 0.5rem;">Lagerrapport (PDF)</button>
           <button class="btn-primary" onclick="generateVærdiReport()">Værdirapport (PDF)</button>
-          <div id="report-content" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- Rapport liste -->
+        <div id="reports-list">
+          <div style="margin-bottom: 0.5rem;">
+            <strong>Vis alle rapporter:</strong>
+            <button class="btn-secondary" onclick="generateLavStatusRapport()" style="margin-left: 0.5rem;">Lav status rapport</button>
+          </div>
+          
+          <table id="reports-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                <th style="padding: 0.75rem; text-align: left;">Dato / Tid</th>
+                <th style="padding: 0.75rem; text-align: left;">Handling (Rapport navn)</th>
+                <th style="padding: 0.75rem; text-align: left;">Vare / Note</th>
+                <th style="padding: 0.75rem; text-align: left;">Antal varer</th>
+                <th style="padding: 0.75rem; text-align: left;">Lokation</th>
+                <th style="padding: 0.75rem; text-align: left;">Handlinger</th>
+              </tr>
+            </thead>
+            <tbody id="reports-tbody">
+              <!-- Rapporter indlæses her -->
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
   </main>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+      <script>
+        // Force reload - clear all caches
+        const CACHE_VERSION = 'v24_' + Date.now();
+        console.log('========================================');
+        console.log('=== INDEX.HTML LOADING ===');
+        console.log('Cache version:', CACHE_VERSION);
+        console.log('Timestamp:', new Date().toISOString());
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            console.log('Clearing caches:', names.length);
+            names.forEach(name => caches.delete(name));
+          });
+        }
+        console.log('Loading config.js and app.js v24...');
+        console.log('========================================');
+      </script>
+      <script src="config.js?v=24"></script>
+      <script>
+        console.log('Config loaded, now loading app.js...');
+      </script>
+      <script src="app.js?v=24"></script>
+    </main>
+
+    <!-- Modal for vine oversigt -->
+    <div id="vine-modal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Vine Oversigt</h2>
+          <span class="modal-close" onclick="closeVineModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div id="modal-stats" style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <!-- Stats vises her -->
+          </div>
+          <div class="table-container">
+            <table id="modal-vine-table">
+              <thead>
+                <tr>
+                  <th>Navn</th>
+                  <th>Type</th>
+                  <th>Land</th>
+                  <th>Reol</th>
+                  <th>Hylde</th>
+                  <th>Antal</th>
+                  <th>Min.</th>
+                </tr>
+              </thead>
+              <tbody id="modal-vine-tbody">
+                <!-- Vine vises her -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeVineModal()">Luk</button>
+        </div>
+      </div>
+    </div>
+      <script>
+        console.log('All scripts should be loaded now. Check console for errors.');
+      </script>
 </body>
 </html>

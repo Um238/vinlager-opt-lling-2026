@@ -60,6 +60,15 @@ main {
   display: block;
 }
 
+/* Sikr at Labels sektionen KUN vises når Labels siden er aktiv */
+#labels.page:not(.active) {
+  display: none !important;
+}
+
+#labels.page.active {
+  display: block !important;
+}
+
 .card {
   background: white;
   border-radius: 8px;
@@ -78,6 +87,20 @@ main {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.stat-card {
+  position: relative;
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 .stat-card {
@@ -103,6 +126,92 @@ main {
   color: #dc2626;
 }
 
+/* Modal styles */
+.modal {
+  display: none !important;
+  position: fixed !important;
+  z-index: 9999 !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: auto !important;
+  background-color: rgba(0,0,0,0.5) !important;
+}
+
+.modal[style*="display: block"] {
+  display: block !important;
+}
+
+.modal-content {
+  background-color: #fefefe !important;
+  margin: 2% auto !important;
+  padding: 0 !important;
+  border: 1px solid #888 !important;
+  border-radius: 8px !important;
+  width: 90% !important;
+  max-width: 1000px !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+  position: relative !important;
+}
+
+.modal-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 1.5rem !important;
+  border-bottom: 1px solid #ddd !important;
+  background: #1a1a1a !important;
+  color: white !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.modal-header h2 {
+  margin: 0 !important;
+  font-size: 1.5rem !important;
+}
+
+.modal-close {
+  color: white !important;
+  font-size: 28px !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  line-height: 1 !important;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  width: 30px !important;
+  height: 30px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.modal-close:hover,
+.modal-close:focus {
+  color: #ccc !important;
+  text-decoration: none !important;
+}
+
+.modal-body {
+  padding: 1.5rem !important;
+  overflow-y: auto !important;
+  flex: 1 !important;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem !important;
+  border-top: 1px solid #ddd !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+  background: #f5f5f5 !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
 .filter-bar {
   display: flex;
   gap: 1rem;
@@ -125,12 +234,20 @@ table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
+  font-size: 0.9rem;
 }
 
 th, td {
-  padding: 0.75rem;
+  padding: 0.6rem 0.5rem;
   text-align: left;
   border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+td {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 th {
@@ -308,35 +425,211 @@ tr:hover {
 }
 
 .labels-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   margin-top: 1rem;
+  padding-bottom: 0.5rem;
 }
 
 .label {
   border: 2px solid #000;
-  padding: 0.5rem;
-  text-align: center;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 350px;
   page-break-inside: avoid;
 }
 
-.label canvas, .label svg {
-  max-width: 100%;
+.label-info {
+  flex: 1;
+  text-align: left;
+  padding-right: 1rem;
+}
+
+.label-info > div {
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.label-info strong {
+  font-size: 1rem;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.label-qr {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.label canvas, .label svg, .label img {
+  max-width: 100px;
+  max-height: 100px;
+  width: auto;
   height: auto;
 }
 
-@media print {
-  .nav-btn, .filter-bar, .btn-primary, .btn-secondary {
-    display: none;
-  }
+/* Print knap styling - SKJULT som standard */
+.btn-print {
+  display: none !important; /* Skjul som standard */
+  background: #059669;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 0;
+  margin-left: 10px;
+}
 
-  .page {
-    display: block !important;
+.btn-print:hover {
+  background: #047857;
+}
+
+/* Vis print knap KUN på labels siden når den er aktiv */
+#labels.page.active .btn-print {
+  display: inline-block !important;
+}
+
+/* Labels section container - kun labels kan scrolles, ikke hele siden */
+#labels {
+  position: relative;
+  height: calc(100vh - 120px); /* Fuld højde minus header */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Print knap regler er defineret ovenfor - fjernet duplikat */
+
+#labels .card {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#labels .card > h2.sticky-header {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1000;
+  padding: 1rem 0 0.5rem 0;
+  margin: 0;
+  border-bottom: 2px solid #eee;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+/* Filter bar skal kun være sticky inde i labels sektionen når den er aktiv */
+#labels.page.active .filter-bar {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 60px;
+  background: #fff;
+  z-index: 999;
+  padding: 0.75rem 0;
+  margin: 0;
+  border-bottom: 1px solid #eee;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+/* Filter bar på andre sider eller når labels ikke er aktiv */
+.page:not(#labels) .filter-bar,
+#labels.page:not(.active) .filter-bar {
+  position: static !important;
+}
+
+/* Print knap er allerede defineret ovenfor - fjernet duplikat */
+
+#labels .labels-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 1rem;
+}
+
+.status-red {
+  background-color: #fee;
+  color: #c00;
+}
+
+.status-orange {
+  background-color: #ffe4cc;
+  color: #f60;
+}
+
+.status-green {
+  background-color: #e6f7e6;
+  color: #060;
+}
+
+.status-icon {
+  margin-right: 5px;
+  font-size: 1rem;
+}
+
+/* Autocomplete dropdown styling */
+#autocomplete-dropdown {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.autocomplete-item {
+  padding: 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background-color: #e3f2fd;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #labels, #labels * {
+    visibility: visible;
+  }
+  
+  #labels {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  .nav-btn, .filter-bar, .btn-primary, .btn-secondary, .btn-print,
+  .card h2, header, .error-message {
+    display: none !important;
   }
 
   .labels-container {
-    grid-template-columns: repeat(3, 1fr);
+    flex-direction: column;
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .label {
+    break-inside: avoid;
+    width: 100%;
+    max-width: 350px;
   }
 }
 
@@ -366,4 +659,3 @@ tr:hover {
     width: 100%;
   }
 }
-

@@ -1,170 +1,44 @@
-# CellarCount 2026 - Vinlager Optælling
+# TIL GITHUB - Version v24
 
-Et professionelt vinlager optællingssystem med QR-kode scanning, import, labels og rapporter.
+## 📁 Filer til upload til GitHub
 
-## Funktioner
+Denne mappe indeholder alle de opdaterede filer der skal uploades til GitHub Pages.
 
-- ✅ 100% dansk UI og felter
-- ✅ QR-kode scanning og optælling (+1/-1)
-- ✅ CSV/Excel import med 3 modes (overskriv/tilføj/opdater)
-- ✅ Lageroversigt med filtrering (reol/hylde)
-- ✅ Labels/print med QR-koder
-- ✅ PDF rapporter (lager og værdi)
-- ✅ Samlet lagerværdi beregning (kr. og øre)
-- ✅ Billede upload til vine
-- ✅ Optællingshistorik
+### ✅ Filer i denne mappe:
 
-## Teknologi
+1. **index.html** - Hoved HTML fil (Version v24)
+2. **app.js** - JavaScript funktionalitet (Version v24)
+3. **styles.css** - CSS styling (Version v18)
+4. **config.js** - Konfiguration fil
 
-- **Backend:** Node.js, Express, SQLite
-- **Frontend:** HTML5, CSS3, JavaScript (Vanilla)
-- **QR-koder:** QRCode.js
-- **PDF:** jsPDF
-- **Import:** xlsx for Excel, native CSV parsing
+### 📋 Nye features i v24:
 
-## Hurtig Start
+- ✅ Dansk prisformatering (138.840,00 kr.)
+- ✅ Klikbare statistikker på Dashboard (Antal vine / Lavt lager)
+- ✅ Modal popup med vine oversigt
+- ✅ Autocomplete dropdown til søgning
+- ✅ Rettet rapportfiltrering (Denne måned / Sidste måned)
+- ✅ "Lav status rapport" knap (genererer rapport uden at vise)
+- ✅ Rettet dato parsing for månedfilter
+- ✅ Editable pris og minimum antal i lager tabellen
+- ✅ Billede upload/visning i lager tabel
+- ✅ QR-kode scanning med autocomplete
 
-### 1. Installer Backend Dependencies
+### 🚀 Upload instruktioner:
 
-```bash
-cd backend
-npm install
-```
+1. Upload alle 4 filer til dit GitHub repository
+2. Sørg for at filerne er i root mappen eller i samme mappe struktur
+3. `config.js` skal være i samme mappe som `index.html`
+4. Efter upload, tjek at GitHub Pages er aktiveret og peger på `index.html`
 
-### 2. Opret .env fil
+### ⚠️ Vigtigt:
 
-```bash
-cp .env.example .env
-```
+- Backend skal køre på `http://localhost:3000` (eller ændr i `config.js`)
+- Alle filer skal være i samme mappe for at links virker
+- Test lokalt først ved at åbne `index.html` i browser
 
-Rediger `.env` og sæt:
-```
-PORT=3000
-JWT_SECRET=din-hemmelige-nøgle-her
-DB_PATH=./data/vinlager.db
-```
+### 📝 Noter:
 
-### 3. Start Backend
-
-```bash
-npm start
-```
-
-Backend kører nu på `http://localhost:3000`
-
-### 4. Start Frontend
-
-**Lokalt:**
-- Åbn `frontend/index.html` i en browser
-- Eller brug en lokal webserver (fx Live Server i VS Code)
-
-**GitHub Pages:**
-- Se [GITHUB_DEPLOYMENT.md](GITHUB_DEPLOYMENT.md) for instruktioner
-
-## Datamodel
-
-Hver vin har følgende felter:
-
-```json
-{
-  "vinId": "VIN-0001",           // Unik ID (brugt til QR)
-  "varenummer": "123456",        // Varenummer
-  "navn": "Château Margaux",
-  "type": "Rødvin",
-  "kategori": "Rødvin",
-  "land": "Frankrig",
-  "region": "Bordeaux",
-  "drue": "Cabernet Sauvignon",
-  "årgang": 2019,
-  "reol": "A",
-  "hylde": "2",
-  "antal": 24,
-  "minAntal": 6,
-  "indkøbspris": 1250.00,
-  "billede": "/uploads/images/wine-123.jpg",
-  "oprettet": "2026-01-01"
-}
-```
-
-## Import
-
-### CSV Format
-CSV filer skal bruge semikolon (`;`) som separator.
-
-### Excel Format
-Excel filer (.xlsx) understøttes også.
-
-### Import Modes
-
-1. **Overskriv:** Sletter hele lageret og importerer nyt
-2. **Tilføj:** Tilføjer kun nye vine (springer eksisterende over)
-3. **Opdater:** Opdaterer eksisterende vine baseret på vinId
-
-### Skabelon
-
-Se `skabelon/vinlager_skabelon.csv` for eksempel med 65 realistiske vine.
-
-## API Endpoints
-
-- `GET /api/wines` - Hent alle vine
-- `GET /api/wines/:vinId` - Hent specifik vin
-- `POST /api/wines` - Opret vin
-- `PUT /api/wines/:vinId` - Opdater vin
-- `DELETE /api/wines/:vinId` - Slet vin
-- `POST /api/count/:vinId` - Opdater antal (optælling)
-- `POST /api/import/csv` - Import CSV
-- `POST /api/import/excel` - Import Excel
-- `GET /api/reports/lager` - Lagerrapport
-- `GET /api/reports/værdi` - Værdirapport
-
-## Projektstruktur
-
-```
-vinlager-optælling-2026/
-├── backend/
-│   ├── src/
-│   │   ├── config/      # Database konfiguration
-│   │   ├── routes/      # API routes
-│   │   ├── controllers/ # Request handlers
-│   │   └── utils/       # Hjælpefunktioner
-│   ├── uploads/         # Uploadede billeder
-│   ├── data/            # SQLite database
-│   └── package.json
-├── frontend/
-│   ├── index.html
-│   ├── app.js
-│   ├── config.js        # Backend URL konfiguration
-│   └── styles.css
-├── skabelon/
-│   └── vinlager_skabelon.csv
-└── README.md
-```
-
-## Deployment
-
-### Lokalt (Nu)
-- Backend kører lokalt på din PC
-- Frontend kan køre lokalt eller via GitHub Pages
-
-### Cloud (Senere)
-- Backend kan flyttes til Render/Railway/Heroku
-- Frontend peger på ny backend URL (kun konfiguration)
-
-Se [GITHUB_DEPLOYMENT.md](GITHUB_DEPLOYMENT.md) for detaljerede instruktioner.
-
-## Konfiguration
-
-### Backend URL
-
-Rediger `frontend/config.js` for at ændre backend URL:
-
-```javascript
-const CONFIG = {
-  API_URL: 'http://localhost:3000',  // Lokal
-  // API_URL: 'https://din-backend-url.herokuapp.com',  // Cloud
-};
-```
-
-## Licens
-
-Privat projekt
+- Version v24 indeholder alle seneste opdateringer
+- Alle cache-busting mekanismer er inkluderet
+- Autocomplete fungerer med VIN-ID, varenummer og navn

@@ -1,10 +1,6 @@
 // Backend konfiguration
-// Til lokalt kørsel: http://localhost:3000
-// Til cloud: sæt din backend URL her
+// SIMPEL: Brug altid localhost når du kører lokalt
 const CONFIG = {
-  API_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3000'
-    : 'https://din-backend-url.herokuapp.com', // Ændre til din cloud backend URL
+  API_URL: 'http://localhost:3000',  // ÆNDR KUN DENNE HVIS BACKEND ER I CLOUD
   TIMEOUT: 10000
 };
-

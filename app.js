@@ -1,14 +1,51 @@
+// ============================================
+// VINLAGER OPTÆLLING 2026 - APP.JS v24
+// ============================================
+console.log('========================================');
+console.log('=== APP.JS SCRIPT START ===');
+console.log('Version: v11');
+console.log('Timestamp:', new Date().toISOString());
+console.log('========================================');
+
 // Global state
 let allWines = [];
 let currentWine = null;
 let currentCount = null;
 
+// ============================================
+// DEBUG: Tjek om scriptet er indlæst
+// ============================================
+console.log('========================================');
+console.log('=== APP.JS START LOADING ===');
+console.log('Version: v24');
+console.log('Timestamp:', new Date().toISOString());
+console.log('========================================');
+
+// Formatér tal i dansk format (punktum som tusindseperator, komma som decimalseparator)
+// Eksempel: 137505.00 -> "137.505,00"
+function formatDanskPris(amount) {
+  const parts = amount.toFixed(2).split('.');
+  const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const decimalPart = parts[1] || '00';
+  return `${integerPart},${decimalPart}`;
+}
+
 // Initialiser app
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, initialiserer app...');
   setupNavigation();
-  loadWines();
+  
+  // Vent lidt før vi loader data, så HTML er helt klar
+  setTimeout(() => {
+    loadWines();
+  }, 100);
+  
   setupFileInput();
-  setupScanInput();
+  
+  // setupScanInput kun hvis funktionen findes
+  if (typeof setupScanInput === 'function') {
+    setupScanInput();
+  }
 });
 
 // Navigation
@@ -35,6 +72,8 @@ function showPage(pageId) {
     renderLager();
   } else if (pageId === 'labels') {
     loadLabelsFilters();
+  } else if (pageId === 'rapporter') {
+    loadReportsHistory();
   }
 }
 
@@ -65,11 +104,36 @@ async function apiCall(endpoint, options = {}) {
 async function loadWines() {
   try {
     allWines = await apiCall('/api/wines');
+    
+    // Opdater minimum til 24 for alle vine der ikke har det sat
+    const needsUpdate = allWines.filter(w => !w.minAntal || w.minAntal === 0);
+    if (needsUpdate.length > 0) {
+      console.log(`Opdaterer ${needsUpdate.length} vine til minimum 24...`);
+      for (const wine of needsUpdate) {
+        try {
+          wine.minAntal = 24;
+          await apiCall(`/api/wines/${wine.vinId}`, {
+            method: 'PUT',
+            body: JSON.stringify(wine)
+          });
+        } catch (err) {
+          console.error(`Fejl ved opdatering af ${wine.vinId}:`, err);
+        }
+      }
+      // Genhent efter opdatering
+      allWines = await apiCall('/api/wines');
+    }
+    
     updateDashboard();
     populateFilters();
+    
+    // Setup scan input autocomplete efter vine er indlæst
+    if (document.getElementById('scan-input')) {
+      setupScanInput();
+    }
   } catch (error) {
     console.error('Fejl ved indlæsning af vine:', error);
-    alert('Kunne ikke hente vine. Tjek at backend kører.');
+    showError('Kunne ikke hente vine. Tjek at backend kører.');
   }
 }
 
@@ -85,10 +149,135 @@ function updateDashboard() {
   const kroner = Math.floor(totalVærdi);
   const øre = Math.round((totalVærdi - kroner) * 100);
 
-  document.getElementById('stat-ant-vine').textContent = antVine;
-  document.getElementById('stat-lavt').textContent = lavtLager;
-  document.getElementById('stat-værdi').textContent = `${kroner} kr. ${øre} øre`;
+  // Opdater dashboard elementer hvis de findes
+  const statAntVine = document.getElementById('stat-ant-vine');
+  const statLavt = document.getElementById('stat-lavt');
+  const statVærdi = document.getElementById('stat-værdi');
+  
+  if (statAntVine) statAntVine.textContent = antVine;
+  if (statLavt) statLavt.textContent = lavtLager;
+  if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
 }
+
+// Vis vine oversigt modal
+function showVineOversigt(type) {
+  const modal = document.getElementById('vine-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalStats = document.getElementById('modal-stats');
+  const modalTbody = document.getElementById('modal-vine-tbody');
+  
+  if (!modal) return;
+  
+  // Filtrer vine
+  let filteredWines = [];
+  if (type === 'lavt') {
+    filteredWines = allWines.filter(w => w.antal < w.minAntal);
+    modalTitle.textContent = 'Lavt Lager - Oversigt';
+  } else {
+    filteredWines = allWines;
+    modalTitle.textContent = 'Alle Vine - Oversigt';
+  }
+  
+  // Beregn statistikker
+  const statType = {};
+  const statLand = {};
+  const statReol = {};
+  
+  filteredWines.forEach(wine => {
+    // Type statistik
+    const type = wine.type || 'Ukendt';
+    statType[type] = (statType[type] || 0) + 1;
+    
+    // Land statistik
+    const land = wine.land || 'Ukendt';
+    statLand[land] = (statLand[land] || 0) + 1;
+    
+    // Reol statistik
+    const reol = wine.reol || 'Ukendt';
+    statReol[reol] = (statReol[reol] || 0) + 1;
+  });
+  
+  // Vis statistikker
+  const typeList = Object.entries(statType)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, count]) => `${type}: ${count}`)
+    .join(', ');
+  
+  const landList = Object.entries(statLand)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([land, count]) => `${land}: ${count}`)
+    .join(', ');
+  
+  const reolList = Object.keys(statReol).sort().join(', ');
+  
+  modalStats.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+      <div>
+        <strong>Total antal:</strong> ${filteredWines.length} vine
+      </div>
+      <div>
+        <strong>Type:</strong> ${typeList || 'Ingen data'}
+      </div>
+      <div>
+        <strong>Top lande:</strong> ${landList || 'Ingen data'}
+      </div>
+      <div>
+        <strong>Reoler:</strong> ${reolList || 'Ingen data'}
+      </div>
+    </div>
+  `;
+  
+  // Vis vine i tabel
+  modalTbody.innerHTML = '';
+  filteredWines.sort((a, b) => {
+    // Sorter først efter reol, så hylde, så navn
+    if (a.reol !== b.reol) {
+      return (a.reol || '').localeCompare(b.reol || '');
+    }
+    if (a.hylde !== b.hylde) {
+      return (a.hylde || '').localeCompare(b.hylde || '');
+    }
+    return (a.navn || '').localeCompare(b.navn || '');
+  });
+  
+  filteredWines.forEach(wine => {
+    const row = document.createElement('tr');
+    const lavtLagerClass = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
+    row.innerHTML = `
+      <td${lavtLagerClass}>${wine.navn || ''}</td>
+      <td${lavtLagerClass}>${wine.type || ''}</td>
+      <td${lavtLagerClass}>${wine.land || ''}</td>
+      <td${lavtLagerClass}>${wine.reol || ''}</td>
+      <td${lavtLagerClass}>${wine.hylde || ''}</td>
+      <td${lavtLagerClass} class="text-right">${wine.antal || 0}</td>
+      <td${lavtLagerClass} class="text-right">${wine.minAntal || 24}</td>
+    `;
+    modalTbody.appendChild(row);
+  });
+  
+  modal.style.display = 'block';
+  modal.style.setProperty('display', 'block', 'important');
+  document.body.style.overflow = 'hidden'; // Forhindre scroll på body når modal er åben
+}
+
+// Luk modal
+function closeVineModal() {
+  const modal = document.getElementById('vine-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.style.setProperty('display', 'none', 'important');
+    document.body.style.overflow = ''; // Tillad scroll på body igen
+  }
+}
+
+// Luk modal når man klikker uden for (tjek om der allerede er en onclick handler)
+document.addEventListener('click', function(event) {
+  const modal = document.getElementById('vine-modal');
+  if (modal && event.target === modal) {
+    closeVineModal();
+  }
+});
 
 // Lager visning
 function populateFilters() {
@@ -147,9 +336,31 @@ function renderLager() {
 
   filtered.forEach(wine => {
     const row = document.createElement('tr');
+    const minAntal = wine.minAntal || 24; // Standard minimum er 24 flasker
+    const antal = wine.antal || 0;
+    let statusClass = '';
+    let statusIcon = '';
+    let advarsel = '';
+    
+    // Farvekodning baseret på ANTAL (ikke minimum)
+    // Grøn: 24 eller flere flasker
+    // Gul: 13-23 flasker  
+    // Rød: 12 eller færre flasker
+    if (antal >= 24) {
+      statusClass = 'status-green';
+      statusIcon = '🟢';
+    } else if (antal >= 13) {
+      statusClass = 'status-orange';
+      statusIcon = '🟠';
+    } else {
+      statusClass = 'status-red';
+      statusIcon = '🔴';
+      advarsel = ' ⚠️ Lavt lager!';
+    }
+    
     const lavtLager = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
     row.innerHTML = `
-      <td>${wine.vinId || ''}</td>
+      <td>${wine.varenummer || ''}</td>
       <td>${wine.navn || ''}</td>
       <td>${wine.type || ''}</td>
       <td>${wine.land || ''}</td>
@@ -157,33 +368,398 @@ function renderLager() {
       <td>${wine.årgang || ''}</td>
       <td>${wine.reol || ''}</td>
       <td>${wine.hylde || ''}</td>
-      <td class="text-right"${lavtLager}>${wine.antal || 0}</td>
-      <td class="text-right">${wine.minAntal || 0}</td>
-      <td class="text-right">${wine.indkøbspris ? wine.indkøbspris.toFixed(2) : ''}</td>
+      <td class="text-right antal-cell"${lavtLager}>${wine.antal || 0}</td>
+      <td class="text-right" data-status-cell="true">
+        <div class="${statusClass}" style="padding: 2px 5px; border-radius: 3px; display: inline-block;">
+          <span class="status-icon-${wine.vinId}">${statusIcon}</span>
+          <input type="number" 
+                 class="min-antal-input" 
+                 value="${minAntal}" 
+                 data-vinid="${wine.vinId}"
+                 min="0"
+                 style="width: 60px; text-align: right; border: 1px solid #ddd; padding: 2px 5px; background: white;">
+        </div>
+        ${advarsel ? `<div style="color: red; font-size: 0.8em; margin-top: 2px;">${advarsel}</div>` : ''}
+      </td>
+      <td class="text-right">
+        <input type="number" 
+               class="pris-input" 
+               value="${wine.indkøbspris || ''}" 
+               data-vinid="${wine.vinId}"
+               step="0.01"
+               min="0"
+               placeholder="0.00"
+               style="width: 80px; text-align: right; border: 1px solid #ddd; padding: 2px 5px; background: white;">
+        ${wine.indkøbspris ? ' kr.' : ''}
+      </td>
+      <td style="text-align: center; vertical-align: middle;">
+        <input type="file" 
+               accept="image/*" 
+               id="image-input-${wine.vinId}"
+               style="display: none;"
+               onchange="if(typeof window !== 'undefined' && window.uploadWineImage) { window.uploadWineImage(this, '${wine.vinId}'); } else { console.error('uploadWineImage ikke fundet'); alert('Upload funktion ikke fundet. Tryk Ctrl+Shift+R for at genindlæse.'); }">
+        ${wine.billede ? `
+          <div onclick="const input = document.getElementById('image-input-${wine.vinId}'); if(input) input.click();" style="cursor: pointer; display: inline-block; position: relative;">
+            <img src="${CONFIG.API_URL}/uploads/images/${wine.billede}" 
+                 alt="${wine.navn}" 
+                 style="width: 60px; height: 60px; object-fit: cover; border: 2px solid #007bff; border-radius: 4px;"
+                 onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div style="display: none; border: 2px dashed #ccc; padding: 12px 16px; text-align: center; border-radius: 4px; background: #fafafa;">
+              <div style="font-size: 20px; color: #999;">+</div>
+              <div style="font-size: 11px; color: #666;">Billede</div>
+            </div>
+            <button onclick="event.stopPropagation(); if(window.deleteWineImage) { if(confirm('Slet billede?')) window.deleteWineImage('${wine.vinId}'); }" 
+                    style="position: absolute; top: -6px; right: -6px; background: red; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; font-size: 12px; line-height: 1; padding: 0;">×</button>
+          </div>
+        ` : `
+          <div onclick="const input = document.getElementById('image-input-${wine.vinId}'); if(input) input.click();" 
+               style="border: 2px dashed #ccc; padding: 12px 16px; text-align: center; cursor: pointer; border-radius: 4px; background: #fafafa; display: inline-block;">
+            <div style="font-size: 20px; color: #999; margin-bottom: 2px;">+</div>
+            <div style="font-size: 11px; color: #666;">Billede</div>
+          </div>
+        `}
+      </td>
     `;
     tbody.appendChild(row);
+    
+    // Tilføj event listeners til input EFTER det er sat i DOM
+    const minAntalInput = row.querySelector('.min-antal-input');
+    if (minAntalInput) {
+      minAntalInput.addEventListener('change', function() {
+        const newValue = parseInt(this.value) || 0;
+        updateMinAntalAndStatus(this.dataset.vinid, newValue, this);
+      });
+      minAntalInput.addEventListener('blur', function() {
+        const newValue = parseInt(this.value) || 0;
+        updateMinAntalAndStatus(this.dataset.vinid, newValue, this);
+      });
+    }
+    
+    // Tilføj event listeners til pris input
+    const prisInput = row.querySelector('.pris-input');
+    if (prisInput) {
+      prisInput.addEventListener('change', function() {
+        updatePris(this.dataset.vinid, this.value);
+      });
+      prisInput.addEventListener('blur', function() {
+        updatePris(this.dataset.vinid, this.value);
+      });
+    }
   });
+}
+
+// Opdater pris
+async function updatePris(vinId, newPris) {
+  try {
+    const wine = allWines.find(w => w.vinId === vinId);
+    if (!wine) throw new Error('Vin ikke fundet lokalt');
+
+    const pris = newPris ? parseFloat(newPris) : null;
+    wine.indkøbspris = pris;
+
+    await apiCall(`/api/wines/${vinId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ...wine, indkøbspris: pris })
+    });
+
+    // Opdater visningen
+    updateDashboard();
+    showSuccess('Pris opdateret!');
+  } catch (error) {
+    console.error('Fejl ved opdatering af pris:', error);
+    showError('Kunne ikke opdatere pris');
+    renderLager(); // Genindlæs for at få korrekt værdi tilbage
+  }
+}
+
+// Opdater minimum og opdater status farve/ikon dynamisk
+async function updateMinAntalAndStatus(vinId, minAntal, inputElement) {
+  try {
+    // Opdater status visuelt først (instant feedback)
+    const row = inputElement.closest('tr');
+    const statusCell = row.querySelector('[data-status-cell]');
+    const statusIcon = row.querySelector(`.status-icon-${vinId}`);
+    
+    // Hent antal fra rækken (ikke fra input)
+    const antalCell = row.querySelector('td.antal-cell');
+    const antal = parseInt(antalCell ? antalCell.textContent.trim() : '0') || 0;
+    
+    // Beregn ny status baseret på ANTAL (ikke minimum)
+    let statusClass = '';
+    let statusIconChar = '';
+    let advarsel = '';
+    
+    if (antal >= 24) {
+      statusClass = 'status-green';
+      statusIconChar = '🟢';
+    } else if (antal >= 13) {
+      statusClass = 'status-orange';
+      statusIconChar = '🟠';
+    } else {
+      statusClass = 'status-red';
+      statusIconChar = '🔴';
+      advarsel = ' ⚠️ Lavt lager!';
+    }
+    
+    // Opdater visuelt med det samme
+    if (statusCell) {
+      const statusDiv = statusCell.querySelector('div');
+      if (statusDiv) {
+        statusDiv.className = statusClass;
+        statusDiv.style.cssText = 'padding: 2px 5px; border-radius: 3px; display: inline-block;';
+      }
+    }
+    if (statusIcon) {
+      statusIcon.textContent = statusIconChar;
+    }
+    
+    // Opdater advarsel hvis nødvendigt
+    let advarselDiv = statusCell.querySelector('.lager-advarsel');
+    if (antal < 13) {
+      if (!advarselDiv) {
+        advarselDiv = document.createElement('div');
+        advarselDiv.className = 'lager-advarsel';
+        advarselDiv.style.cssText = 'color: red; font-size: 0.8em; margin-top: 2px;';
+        statusCell.appendChild(advarselDiv);
+      }
+      advarselDiv.textContent = '⚠️ Lavt lager!';
+    } else if (advarselDiv) {
+      advarselDiv.remove();
+    }
+    
+    // Gem i backend
+    const wine = await apiCall(`/api/wines/${vinId}`);
+    wine.minAntal = minAntal;
+    
+    await apiCall(`/api/wines/${vinId}`, {
+      method: 'PUT',
+      body: JSON.stringify(wine)
+    });
+    
+    showSuccess('Minimum opdateret!');
+  } catch (error) {
+    console.error('Fejl ved opdatering af minimum:', error);
+    showError('Kunne ikke opdatere minimum antal');
+    // Genindlæs for at få korrekt værdi tilbage
+    renderLager();
+  }
 }
 
 // QR Scanning og optælling
 function setupScanInput() {
   const input = document.getElementById('scan-input');
+  if (!input) {
+    console.warn('scan-input element ikke fundet - skip setup');
+    return;
+  }
+  
+  const dropdown = document.getElementById('autocomplete-dropdown');
+  if (!dropdown) {
+    console.warn('autocomplete-dropdown element ikke fundet - skip autocomplete');
+    // Fortsæt uden autocomplete, men tillad stadig scanning
+    return;
+  }
+  
+  let selectedIndex = -1;
+  let currentMatches = [];
+  
+  // Input event for autocomplete
+  input.addEventListener('input', (e) => {
+    const query = e.target.value.trim().toLowerCase();
+    
+    if (query.length < 1) {
+      dropdown.style.display = 'none';
+      return;
+    }
+    
+    // Søg i vine
+    currentMatches = allWines.filter(wine => {
+      const vinId = (wine.vinId || '').toLowerCase();
+      const varenummer = (wine.varenummer || '').toLowerCase();
+      const navn = (wine.navn || '').toLowerCase();
+      
+      return vinId.includes(query) || 
+             varenummer.includes(query) || 
+             navn.includes(query);
+    }).slice(0, 10); // Begræns til 10 matches
+    
+    if (currentMatches.length > 0) {
+      renderAutocomplete(currentMatches);
+      dropdown.style.display = 'block';
+      selectedIndex = -1;
+    } else {
+      dropdown.style.display = 'none';
+    }
+  });
+  
+  // Render autocomplete dropdown
+  function renderAutocomplete(matches) {
+    dropdown.innerHTML = '';
+    matches.forEach((wine, index) => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.style.cssText = 'padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;';
+      item.innerHTML = `
+        <div style="font-weight: bold;">${wine.vinId || ''} - ${wine.navn || ''}</div>
+        <div style="font-size: 0.9em; color: #666;">Varenummer: ${wine.varenummer || 'N/A'} | Antal: ${wine.antal || 0}</div>
+      `;
+      
+      item.addEventListener('mouseenter', () => {
+        selectedIndex = index;
+        updateSelection();
+      });
+      
+      item.addEventListener('click', () => {
+        selectWine(wine);
+      });
+      
+      dropdown.appendChild(item);
+    });
+    updateSelection();
+  }
+  
+  // Update selected item styling
+  function updateSelection() {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    items.forEach((item, index) => {
+      if (index === selectedIndex) {
+        item.style.backgroundColor = '#e3f2fd';
+      } else {
+        item.style.backgroundColor = 'white';
+      }
+    });
+  }
+  
+  // Select wine from autocomplete
+  function selectWine(wine) {
+    input.value = wine.vinId || wine.varenummer || '';
+    dropdown.style.display = 'none';
+    scanQR();
+  }
+  
+  // Keyboard navigation
+  input.addEventListener('keydown', (e) => {
+    if (dropdown.style.display === 'none') {
+      if (e.key === 'Enter') {
+        scanQR();
+      }
+      return;
+    }
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, currentMatches.length - 1);
+      updateSelection();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, -1);
+      updateSelection();
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      selectWine(currentMatches[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+    }
+  });
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+  
+  // Original Enter key handler (når dropdown er lukket)
   input.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && dropdown.style.display === 'none') {
       scanQR();
     }
   });
 }
 
+let qrStream = null;
+let qrScanning = false;
+
+// Start QR scanner med kamera
+async function startQRScanner() {
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  const btn = document.getElementById('start-camera-btn');
+  
+  if (qrScanning) {
+    // Stop scanning
+    if (qrStream) {
+      qrStream.getTracks().forEach(track => track.stop());
+      qrStream = null;
+    }
+    video.style.display = 'none';
+    qrScanning = false;
+    btn.textContent = '📷 Start kamera scanner';
+    return;
+  }
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment' } // Back camera på mobil
+    });
+    qrStream = stream;
+    video.srcObject = stream;
+    video.style.display = 'block';
+    qrScanning = true;
+    btn.textContent = '⏹ Stop scanner';
+    
+    video.play();
+    
+    // Scan loop
+    function scanFrame() {
+      if (!qrScanning) return;
+      
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        if (typeof jsQR !== 'undefined') {
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            document.getElementById('scan-input').value = code.data;
+            scanQR();
+            stopQRScanner();
+          }
+        }
+      }
+      requestAnimationFrame(scanFrame);
+    }
+    scanFrame();
+  } catch (error) {
+    console.error('Kamera fejl:', error);
+    showError('Kunne ikke tilgå kamera. Tjek tilladelser.');
+  }
+}
+
+// Stop QR scanner
+function stopQRScanner() {
+  if (qrStream) {
+    qrStream.getTracks().forEach(track => track.stop());
+    qrStream = null;
+  }
+  document.getElementById('qr-video').style.display = 'none';
+  qrScanning = false;
+  document.getElementById('start-camera-btn').textContent = '📷 Start kamera scanner';
+}
+
 async function scanQR() {
-  const vinId = document.getElementById('scan-input').value.trim();
-  if (!vinId) {
-    showError('Indtast venligst en VIN-ID');
+  const searchValue = document.getElementById('scan-input').value.trim();
+  if (!searchValue) {
+    showError('Indtast venligst en VIN-ID eller varenummer');
     return;
   }
 
   try {
-    currentWine = await apiCall(`/api/wines/${vinId}`);
+    // Backend søger nu automatisk på både vinId og varenummer
+    currentWine = await apiCall(`/api/wines/${encodeURIComponent(searchValue)}`);
     showWineDetails(currentWine);
     currentCount = currentWine.antal;
     document.getElementById('count-input').value = '';
@@ -208,7 +784,7 @@ function showWineDetails(wine) {
   // Vis billede hvis tilgængelig
   const imgContainer = document.getElementById('wine-billede-container');
   if (wine.billede) {
-    imgContainer.innerHTML = `<img src="${CONFIG.API_URL}${wine.billede}" alt="${wine.navn}">`;
+    imgContainer.innerHTML = `<img src="${CONFIG.API_URL}/uploads/images/${wine.billede}" alt="${wine.navn}">`;
   } else {
     imgContainer.innerHTML = '';
   }
@@ -226,6 +802,52 @@ function updateCount(change) {
     currentCount += change;
   }
   document.getElementById('wine-antal').textContent = currentCount;
+}
+
+// Opdater status farve baseret på antal
+function updateStatusColor(row, antal) {
+  const statusCell = row.querySelector('[data-status-cell]');
+  const statusIcon = row.querySelector(`.status-icon-${row.querySelector('.min-antal-input')?.dataset.vinid || ''}`);
+  
+  if (!statusCell) return;
+  
+  let statusClass = '';
+  let statusIconChar = '';
+  let advarsel = '';
+  
+  if (antal >= 24) {
+    statusClass = 'status-green';
+    statusIconChar = '🟢';
+  } else if (antal >= 13) {
+    statusClass = 'status-orange';
+    statusIconChar = '🟠';
+  } else {
+    statusClass = 'status-red';
+    statusIconChar = '🔴';
+    advarsel = '⚠️ Lavt lager!';
+  }
+  
+  const statusDiv = statusCell.querySelector('div');
+  if (statusDiv) {
+    statusDiv.className = statusClass;
+  }
+  if (statusIcon) {
+    statusIcon.textContent = statusIconChar;
+  }
+  
+  // Opdater advarsel
+  let advarselDiv = statusCell.querySelector('.lager-advarsel');
+  if (antal < 13) {
+    if (!advarselDiv) {
+      advarselDiv = document.createElement('div');
+      advarselDiv.className = 'lager-advarsel';
+      advarselDiv.style.cssText = 'color: red; font-size: 0.8em; margin-top: 2px;';
+      statusCell.appendChild(advarselDiv);
+    }
+    advarselDiv.textContent = '⚠️ Lavt lager!';
+  } else if (advarselDiv) {
+    advarselDiv.remove();
+  }
 }
 
 async function saveCount() {
@@ -258,6 +880,8 @@ async function saveCount() {
     }
 
     updateDashboard();
+    // Opdater lager visning (inkl. farvekodning baseret på nyt antal)
+    await loadWines();
     renderLager();
 
     // Ryd input
@@ -273,19 +897,45 @@ async function saveCount() {
   }
 }
 
+function showSuccess(message) {
+  let successDiv = document.getElementById('success-message');
+  if (!successDiv) {
+    successDiv = document.createElement('div');
+    successDiv.id = 'success-message';
+    successDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 1rem; border-radius: 4px; z-index: 10000; display: block;';
+    document.body.appendChild(successDiv);
+  }
+  successDiv.textContent = message;
+  successDiv.style.display = 'block';
+  setTimeout(() => {
+    successDiv.style.display = 'none';
+  }, 3000);
+}
+
 function showError(message) {
   const errorDiv = document.getElementById('scan-error');
-  errorDiv.textContent = message;
-  errorDiv.style.display = 'block';
-  document.getElementById('wine-details').style.display = 'none';
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    document.getElementById('wine-details').style.display = 'none';
+  } else {
+    alert(message);
+  }
 }
 
 // Import
 function setupFileInput() {
   const fileInput = document.getElementById('file-input');
+  if (!fileInput) {
+    console.warn('file-input element ikke fundet - skip setup');
+    return;
+  }
   fileInput.addEventListener('change', (e) => {
     const fileName = e.target.files[0]?.name || '';
-    document.getElementById('file-name').textContent = fileName;
+    const fileNameEl = document.getElementById('file-name');
+    if (fileNameEl) {
+      fileNameEl.textContent = fileName;
+    }
   });
 }
 
@@ -345,6 +995,30 @@ function loadLabelsFilters() {
   populateFilters();
 }
 
+// Hjælpefunktion til QR canvas generering
+function tryCanvasGeneration(container, text, qrLib) {
+  try {
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    qrLib.toCanvas(canvas, text, {
+      width: 100,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    }, (canvasErr) => {
+      if (canvasErr) {
+        console.error('QR canvas fejl:', canvasErr);
+        container.innerHTML = `<div style="padding: 10px; border: 1px solid #000; text-align: center; font-size: 0.8em;">VIN-ID: ${text}</div>`;
+      }
+    });
+  } catch (e) {
+    console.error('QR canvas exception:', e);
+    container.innerHTML = `<div style="padding: 10px; border: 1px solid #000; text-align: center; font-size: 0.8em;">VIN-ID: ${text}</div>`;
+  }
+}
+
 async function generateLabels() {
   const reolFilter = document.getElementById('label-reol').value;
   const hyldeFilter = document.getElementById('label-hylde').value;
@@ -361,42 +1035,640 @@ async function generateLabels() {
   const container = document.getElementById('labels-container');
   container.innerHTML = '';
 
-  filtered.forEach(wine => {
+  filtered.forEach((wine, index) => {
     const label = document.createElement('div');
     label.className = 'label';
-    const qrId = `qr-${wine.vinId}-${Date.now()}`;
+    const qrId = `qr-${wine.vinId}-${index}-${Date.now()}`;
     label.innerHTML = `
-      <div><strong>${wine.navn || ''}</strong></div>
-      <div>${wine.land || ''} ${wine.årgang || ''}</div>
-      <div>${wine.reol || ''} / ${wine.hylde || ''}</div>
-      <div id="${qrId}"></div>
+      <div class="label-info">
+        <strong>${wine.navn || ''}</strong>
+        <div>Varenr: ${wine.varenummer || ''}</div>
+        <div>${wine.land || ''} ${wine.årgang || ''}</div>
+        <div>Reol ${wine.reol || ''} - Hylde ${wine.hylde || ''}</div>
+      </div>
+      <div class="label-qr" id="${qrId}"></div>
     `;
     container.appendChild(label);
 
-    // Generer QR kode
-    const qrDiv = document.getElementById(qrId);
-    if (qrDiv) {
-      QRCode.toCanvas(qrDiv, wine.vinId, {
-        width: 150,
-        margin: 2
-      }, (err) => {
-        if (err) {
-          console.error('QR fejl:', err);
-          qrDiv.innerHTML = wine.vinId;
+    // Generer QR kode (bruger vinId til QR scanning) - vent lidt så DOM er klar
+    setTimeout(() => {
+      const qrDiv = document.getElementById(qrId);
+      if (!qrDiv) return;
+      
+      // Prøv qrcodejs først (QRCode constructor)
+      if (typeof QRCode !== 'undefined' && QRCode.prototype) {
+        // qrcodejs bibliotek - brug constructor
+        qrDiv.innerHTML = '';
+        try {
+          new QRCode(qrDiv, {
+            text: wine.vinId,
+            width: 100,
+            height: 100,
+            colorDark: '#000000',
+            colorLight: '#FFFFFF',
+            correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 1
+          });
+          return;
+        } catch (e) {
+          console.warn('QRCode constructor fejlede:', e);
         }
-      });
-    }
+      }
+      
+      // Tjek om qrcode (node-qrcode) er tilgængelig
+      const QRCodeLib = window.QRCode || (typeof qrcode !== 'undefined' ? qrcode : null);
+      
+      if (QRCodeLib && typeof QRCodeLib.toDataURL === 'function') {
+        // Prøv med toDataURL først
+        QRCodeLib.toDataURL(wine.vinId, {
+          width: 100,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        }, (err, url) => {
+          if (err) {
+            console.error('QR toDataURL fejl:', err);
+            // Prøv med canvas
+            tryCanvasGeneration(qrDiv, wine.vinId, QRCodeLib);
+          } else {
+            // Brug data URL til at oprette img
+            const img = document.createElement('img');
+            img.src = url;
+            img.style.display = 'block';
+            img.style.margin = '0 auto';
+            img.style.maxWidth = '100px';
+            img.style.maxHeight = '100px';
+            qrDiv.innerHTML = '';
+            qrDiv.appendChild(img);
+          }
+        });
+      } else if (typeof QRCodeLib.toCanvas === 'function') {
+        // Prøv direkte med canvas
+        tryCanvasGeneration(qrDiv, wine.vinId, QRCodeLib);
+      } else {
+        console.warn('QRCode bibliotek ikke fundet. Tjekket:', {
+          QRCode: typeof QRCode,
+          windowQRCode: typeof window.QRCode,
+          qrcode: typeof qrcode,
+          'QRCode.prototype': typeof QRCode !== 'undefined' ? typeof QRCode.prototype : 'undefined'
+        });
+        qrDiv.innerHTML = `<div style="padding: 10px; border: 1px solid #000; text-align: center; font-size: 0.8em;">VIN-ID: ${wine.vinId}</div>`;
+      }
+    }, index * 50); // Lidt delay for hver label
   });
 }
 
+// Opdater minimum antal (for bagudkompatibilitet)
+async function updateMinAntal(vinId, minAntal) {
+  const inputElement = document.querySelector(`[data-vinid="${vinId}"].min-antal-input`);
+  if (inputElement) {
+    await updateMinAntalAndStatus(vinId, parseInt(minAntal) || 0, inputElement);
+  }
+}
+
+// Upload billede til vin
+async function uploadWineImage(input, vinId) {
+  if (!input || !input.files || !input.files[0]) {
+    console.error('Ingen fil valgt');
+    return;
+  }
+  
+  const file = input.files[0];
+  console.log('Uploader billede:', file.name, 'til vin:', vinId);
+  
+  const formData = new FormData();
+  formData.append('billede', file);
+  
+  try {
+    const url = `${CONFIG.API_URL}/api/wines/${vinId}/image`;
+    console.log('Upload URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+      throw new Error(errorData.error || `Upload fejlede: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Upload resultat:', result);
+    
+    // Opdater visningen
+    await loadWines(); // Genhent alle vine
+    renderLager();
+    showSuccess('Billede uploadet!');
+    
+    // Reset file input så man kan uploade samme fil igen
+    if (input) input.value = '';
+  } catch (error) {
+    console.error('Fejl ved upload:', error);
+    alert('Fejl ved upload af billede: ' + error.message);
+    showError('Kunne ikke uploade billede: ' + error.message);
+  }
+}
+
+// Slet billede
+async function deleteWineImage(vinId) {
+  if (!confirm('Er du sikker på, at du vil slette billedet?')) return;
+  
+  try {
+    // Hent vin først
+    const wine = await apiCall(`/api/wines/${vinId}`);
+    
+    // Opdater vin uden billede
+    wine.billede = null;
+    
+    await apiCall(`/api/wines/${vinId}`, {
+      method: 'PUT',
+      body: JSON.stringify(wine)
+    });
+    
+    // Genhent vine og opdater visning
+    await loadWines();
+    renderLager();
+    showSuccess('Billede slettet!');
+  } catch (error) {
+    console.error('Fejl ved sletning:', error);
+    showError('Kunne ikke slette billede');
+  }
+}
+
+// Vis billede i modal
+function showImageModal(imageUrl) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+  modal.innerHTML = `<img src="${imageUrl}" style="max-width: 90%; max-height: 90%;">`;
+  modal.onclick = () => modal.remove();
+  document.body.appendChild(modal);
+}
+
+// Print kun labels
+function printLabels() {
+  const container = document.getElementById('labels-container');
+  if (!container || container.children.length === 0) {
+    showError('Ingen labels at printe. Generer labels først.');
+    return;
+  }
+  
+  // Vis labels siden
+  showPage('labels');
+  
+  // Vent lidt så siden er vist
+  setTimeout(() => {
+    window.print();
+  }, 100);
+}
+
 // Rapporter
+let reportsHistory = [];
+
+// Indlæs rapport historik
+async function loadReportsHistory() {
+  try {
+    // Hent rapporter fra localStorage (kunne også være fra backend)
+    const saved = localStorage.getItem('reportsHistory');
+    if (saved) {
+      reportsHistory = JSON.parse(saved);
+    }
+    // Opdater lokation filter før vi renderer tabellen
+    updateLocationFilter();
+    renderReportsTable();
+  } catch (error) {
+    console.error('Fejl ved indlæsning af rapport historik:', error);
+  }
+}
+
+// Gem rapport i historik
+function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
+  const report = {
+    id: Date.now().toString(),
+    date: new Date().toLocaleString('da-DK'),
+    name: reportName,
+    type: reportType,
+    wineCount: wineCount,
+    totalValue: totalValue,
+    location: 'Lokal',
+    archived: false
+  };
+  
+  reportsHistory.unshift(report); // Tilføj øverst
+  if (reportsHistory.length > 100) {
+    reportsHistory = reportsHistory.slice(0, 100); // Begræns til 100 rapporter
+  }
+  
+  localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+  updateLocationFilter(); // Opdater lokation filter når ny rapport tilføjes
+  renderReportsTable();
+}
+
+// Opdater lokation filter dropdown
+function updateLocationFilter() {
+  const locationSelect = document.getElementById('report-location');
+  if (!locationSelect) return;
+  
+  // Hent alle unikke lokationer fra rapporterne
+  const locations = [...new Set(reportsHistory.map(r => r.location).filter(l => l))];
+  
+  // Gem aktuelt valgte værdi
+  const currentValue = locationSelect.value;
+  
+  // Opdater options
+  locationSelect.innerHTML = '<option value="all">Alle</option>';
+  locations.sort().forEach(location => {
+    const option = document.createElement('option');
+    option.value = location;
+    option.textContent = location;
+    locationSelect.appendChild(option);
+  });
+  
+  // Gendan valgte værdi (hvis den stadig findes)
+  if (locations.includes(currentValue)) {
+    locationSelect.value = currentValue;
+  } else {
+    locationSelect.value = 'all';
+  }
+}
+
+// Render rapport tabel
+function renderReportsTable() {
+  const tbody = document.getElementById('reports-tbody');
+  if (!tbody) return;
+  
+  const periodFilter = document.getElementById('report-period')?.value || 'all';
+  const locationFilter = document.getElementById('report-location')?.value || 'all';
+  
+  // Opdater lokation dropdown med faktiske lokationer
+  updateLocationFilter();
+  
+  let filtered = reportsHistory.filter(r => !r.archived || periodFilter === 'all' || locationFilter === 'all'); // Vis kun ikke-arkiverede som standard, medmindre filter er sat
+  
+  // Filtrer efter periode
+  if (periodFilter !== 'all') {
+    const now = new Date();
+    filtered = filtered.filter(r => {
+      // Parse dansk dato format: "20.1.2026, 08.28.13"
+      let reportDate;
+      try {
+        // Prøv at parse dansk format først
+        const dateStr = r.date.replace(/,.*$/, ''); // Fjern tid del: "20.1.2026"
+        const parts = dateStr.split('.');
+        if (parts.length === 3) {
+          // Format: dd.mm.yyyy
+          reportDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else {
+          // Fallback til standard parsing
+          reportDate = new Date(r.date);
+        }
+      } catch (e) {
+        // Fallback til standard parsing
+        reportDate = new Date(r.date);
+      }
+      
+      if (isNaN(reportDate.getTime())) {
+        return false; // Ugyldig dato
+      }
+      
+      if (periodFilter === 'today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
+        return reportDay.getTime() === today.getTime();
+      } else if (periodFilter === 'week') {
+        // Sidste 7 dage fra nu
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        weekAgo.setHours(0, 0, 0, 0);
+        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
+        return reportDay >= weekAgo && reportDay <= now;
+      } else if (periodFilter === 'thisMonth') {
+        // Denne måned = nuværende kalendermåned
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const thisMonthStart = new Date(currentYear, currentMonth, 1);
+        const thisMonthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
+        return reportDay >= thisMonthStart && reportDay <= thisMonthEnd;
+      } else if (periodFilter === 'lastMonth') {
+        // Sidste måned = forrige kalendermåned (ikke sidste 30 dage)
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+        const lastMonthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
+        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
+        return reportDay >= lastMonthStart && reportDay <= lastMonthEnd;
+      }
+      return true;
+    });
+  }
+  
+  // Filtrer efter lokation
+  if (locationFilter !== 'all') {
+    filtered = filtered.filter(r => r.location === locationFilter);
+  }
+  
+  // Filtrer efter arkiveret status - vis kun ikke-arkiverede som standard
+  filtered = filtered.filter(r => !r.archived);
+  
+  tbody.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding: 1rem; text-align: center; color: #999;">Ingen rapporter fundet</td></tr>';
+    return;
+  }
+  
+  filtered.forEach(report => {
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid #eee';
+    row.innerHTML = `
+      <td style="padding: 0.75rem;">${report.date}</td>
+      <td style="padding: 0.75rem;">
+        ${report.name}
+        <span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-left: 0.5rem;">${report.location}</span>
+      </td>
+      <td style="padding: 0.75rem;">${report.wineCount} linjer — ${formatDanskPris(report.totalValue)} kr.</td>
+      <td style="padding: 0.75rem;">${report.wineCount}</td>
+      <td style="padding: 0.75rem;">${report.location}</td>
+      <td style="padding: 0.75rem;">
+        <button class="btn-secondary" onclick="viewReportPDF('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">Vis PDF</button>
+        <button class="btn-secondary" onclick="downloadReport('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">📥 Download</button>
+        ${!report.archived ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; padding: 0.25rem 0.5rem; font-size: 0.9em;">📦 Arkiver</button>` : '<span style="color: #999;">Arkiveret</span>'}
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// Vis rapport PDF i browser (ikke download)
+function viewReportPDF(reportId) {
+  const report = reportsHistory.find(r => r.id === reportId);
+  if (!report) return;
+  
+  if (report.type === 'lager') {
+    generateLagerReportViewOnly();
+  } else {
+    generateVærdiReportViewOnly();
+  }
+}
+
+// Download rapport
+function downloadReport(reportId) {
+  const report = reportsHistory.find(r => r.id === reportId);
+  if (!report) return;
+  
+  if (report.type === 'lager') {
+    generateLagerReportDownload();
+  } else {
+    generateVærdiReportDownload();
+  }
+}
+
+// Arkiver rapport
+function archiveReport(reportId) {
+  const report = reportsHistory.find(r => r.id === reportId);
+  if (report) {
+    report.archived = true;
+    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    renderReportsTable();
+  }
+}
+
+// Generer lav status rapport (gem i tabellen uden at vise/download)
+async function generateLavStatusRapport() {
+  try {
+    const wines = await apiCall('/api/reports/lager');
+    
+    // Beregn total værdi
+    let totalVærdi = 0;
+    wines.forEach(w => {
+      totalVærdi += (w.antal || 0) * (w.indkøbspris || 0);
+    });
+    
+    // Gem rapport i historik (uden at vise eller downloade PDF)
+    saveReportToHistory('OPTA-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+    
+    showSuccess('Rapport genereret og tilføjet til historik!');
+  } catch (error) {
+    console.error('Fejl ved generering af rapport:', error);
+    showError('Kunne ikke generere rapport: ' + error.message);
+  }
+}
+
 async function generateLagerReport() {
   try {
     const wines = await apiCall('/api/reports/lager');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
-  let y = 20;
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Lagerrapport', 14, y);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+    y += 10;
+
+    // Kun de vigtigste kolonner: VIN-ID, Navn, Type, Land, Antal, Min, Pris
+    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 25, 25, 15, 15, 30];
+    let x = 14;
+
+    // Header
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+
+    // Beregn total værdi
+    let totalVærdi = 0;
+
+    // Rows
+    wines.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        
+        // Tegn header igen på ny side
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+
+      const pris = wine.indkøbspris || 0;
+      const værdi = pris * (wine.antal || 0);
+      totalVærdi += værdi;
+
+      x = 14;
+      // Kun de vigtigste felter - ingen Årgang, Reol, Hylde, Region, Drue
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.type || '',
+        wine.land || '',
+        wine.antal || 0,
+        wine.minAntal || 24,
+        pris > 0 ? pris.toFixed(2) + ' kr.' : ''
+      ];
+
+      row.forEach((cell, i) => {
+        const cellText = String(cell || '');
+        // For pris kolonne (sidste, index 6), brug mere plads
+        const maxChars = i === 6 ? 18 : Math.floor(colWidths[i] / 2.5);
+        let displayText = cellText.length > maxChars ? cellText.substring(0, maxChars - 1) + '...' : cellText;
+        doc.text(displayText, x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+
+    // Tilføj total linje - sørg for plads på siden
+    if (y > 270) {
+      doc.addPage();
+      y = 280;
+    } else {
+      y += 10;
+    }
+    
+    // Linje før total
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(14, y, 196, y);
+    y += 8;
+    
+    // Total tekst - sørg for at den faktisk skrives
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    const totalText = `Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`;
+    doc.text(totalText, 14, y);
+    doc.setFont(undefined, 'normal');
+    
+    console.log('Rapport genereret - Total værdi:', totalVærdi);
+
+    // Gem rapport i historik (brug totalVærdi der allerede er beregnet)
+    saveReportToHistory('OPTA-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+    
+    // Download PDF
+    doc.save('lagerrapport.pdf');
+  } catch (error) {
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+}
+
+// Download lager rapport
+async function generateLagerReportDownload() {
+  try {
+    const wines = await apiCall('/api/reports/lager');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Lagerrapport', 14, y);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+    y += 10;
+
+    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 25, 25, 15, 15, 30];
+    let x = 14;
+
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+
+    let totalVærdi = 0;
+
+    wines.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+
+      const pris = wine.indkøbspris || 0;
+      const værdi = pris * (wine.antal || 0);
+      totalVærdi += værdi;
+
+      x = 14;
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.type || '',
+        wine.land || '',
+        wine.antal || 0,
+        wine.minAntal || 24,
+        pris > 0 ? pris.toFixed(2) + ' kr.' : ''
+      ];
+
+      row.forEach((cell, i) => {
+        const cellText = String(cell || '');
+        const maxChars = i === 6 ? 18 : Math.floor(colWidths[i] / 2.5);
+        let displayText = cellText.length > maxChars ? cellText.substring(0, maxChars - 1) + '...' : cellText;
+        doc.text(displayText, x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+
+    if (y > 270) {
+      doc.addPage();
+      y = 280;
+    } else {
+      y += 10;
+    }
+    
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(14, y, 196, y);
+    y += 8;
+    
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    const totalText = `Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`;
+    doc.text(totalText, 14, y);
+    doc.setFont(undefined, 'normal');
+
+    // Gem rapport i historik
+    saveReportToHistory('OPTA-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+    
+    // Download PDF
+    doc.save('lagerrapport.pdf');
+  } catch (error) {
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+}
+
+// Vis lager rapport i browser (ikke download)
+async function generateLagerReportViewOnly() {
+  try {
+    const wines = await apiCall('/api/reports/lager');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
   doc.setFontSize(16);
   doc.text('Lagerrapport', 14, y);
   y += 10;
@@ -405,11 +1677,10 @@ async function generateLagerReport() {
   doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
   y += 10;
 
-  const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Årgang', 'Reol', 'Hylde', 'Antal', 'Min'];
-  const colWidths = [25, 50, 25, 25, 15, 15, 15, 15, 15];
+  const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+  const colWidths = [30, 60, 25, 25, 15, 15, 30];
   let x = 14;
 
-  // Header
   doc.setFontSize(8);
   headers.forEach((header, i) => {
     doc.text(header, x, y);
@@ -417,12 +1688,23 @@ async function generateLagerReport() {
   });
   y += 6;
 
-  // Rows
+  let totalVærdi = 0;
+
   wines.forEach(wine => {
     if (y > 280) {
       doc.addPage();
       y = 20;
+      x = 14;
+      headers.forEach((header, i) => {
+        doc.text(header, x, y);
+        x += colWidths[i];
+      });
+      y += 6;
     }
+
+    const pris = wine.indkøbspris || 0;
+    const værdi = pris * (wine.antal || 0);
+    totalVærdi += værdi;
 
     x = 14;
     const row = [
@@ -430,21 +1712,49 @@ async function generateLagerReport() {
       wine.navn || '',
       wine.type || '',
       wine.land || '',
-      wine.årgang || '',
-      wine.reol || '',
-      wine.hylde || '',
       wine.antal || 0,
-      wine.minAntal || 0
+      wine.minAntal || 24,
+      pris > 0 ? pris.toFixed(2) + ' kr.' : ''
     ];
 
     row.forEach((cell, i) => {
-      doc.text(String(cell).substring(0, 20), x, y);
+      const cellText = String(cell || '');
+      const maxChars = i === 6 ? 18 : Math.floor(colWidths[i] / 2.5);
+      let displayText = cellText.length > maxChars ? cellText.substring(0, maxChars - 1) + '...' : cellText;
+      doc.text(displayText, x, y);
       x += colWidths[i];
     });
     y += 6;
   });
 
-  doc.save('lagerrapport.pdf');
+  if (y > 270) {
+    doc.addPage();
+    y = 280;
+  } else {
+    y += 10;
+  }
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 8;
+  
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'bold');
+  const totalText = `Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`;
+  doc.text(totalText, 14, y);
+  doc.setFont(undefined, 'normal');
+
+  // Gem rapport i historik
+  saveReportToHistory('OPTA-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+
+  // Åbn PDF i ny fane i stedet for download
+  const pdfBlob = doc.output('blob');
+  const url = URL.createObjectURL(pdfBlob);
+  window.open(url, '_blank');
+  
+  // Ryd op efter lidt tid
+  setTimeout(() => URL.revokeObjectURL(url), 100);
   } catch (error) {
     alert('Fejl ved generering af rapport: ' + error.message);
   }
@@ -505,9 +1815,208 @@ async function generateVærdiReport() {
       y += 6;
     });
 
+    // Gem rapport i historik
+    const totalValueStr = report.total.formateret || '0';
+    const totalValueNum = parseFloat(totalValueStr.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+    saveReportToHistory('VÆRDI-' + Date.now().toString().slice(-6), 'værdi', report.vine.length, totalValueNum);
+    
+    // Download PDF
     doc.save('værdirapport.pdf');
   } catch (error) {
     alert('Fejl ved generering af rapport: ' + error.message);
   }
 }
 
+// Vis værdi rapport i browser (ikke download)
+async function generateVærdiReportViewOnly() {
+  try {
+    const report = await apiCall('/api/reports/værdi');
+    generateVærdiReportPDF(report, false); // Vis i browser
+  } catch (error) {
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+}
+
+// Download værdi rapport
+async function generateVærdiReportDownload() {
+  try {
+    const report = await apiCall('/api/reports/værdi');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    const totalValueStr = report.total.formateret || '0';
+    const totalValueNum = parseFloat(totalValueStr.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+    saveReportToHistory('VÆRDI-' + Date.now().toString().slice(-6), 'værdi', report.vine.length, totalValueNum);
+
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Værdirapport', 14, y);
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.text(`Samlet lagerværdi: ${report.total.formateret}`, 14, y);
+    y += 10;
+
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+    y += 10;
+
+    const headers = ['VIN-ID', 'Navn', 'Antal', 'Pris', 'Værdi'];
+    const colWidths = [30, 70, 20, 30, 30];
+    let x = 14;
+
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+
+    report.vine.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+
+      x = 14;
+      const værdi = (wine.antal || 0) * (wine.indkøbspris || 0);
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.antal || 0,
+        (wine.indkøbspris || 0).toFixed(2),
+        værdi.toFixed(2)
+      ];
+
+      row.forEach((cell, i) => {
+        doc.text(String(cell).substring(0, 25), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+
+    doc.save('værdirapport.pdf');
+  } catch (error) {
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+}
+
+// Helper function for værdi rapport PDF generation (for viewing)
+async function generateVærdiReportPDF(report, download = false) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  let y = 20;
+  doc.setFontSize(16);
+  doc.text('Værdirapport', 14, y);
+  y += 10;
+
+  doc.setFontSize(12);
+  doc.text(`Samlet lagerværdi: ${report.total.formateret}`, 14, y);
+  y += 10;
+
+  doc.setFontSize(10);
+  doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+  y += 10;
+
+  const headers = ['VIN-ID', 'Navn', 'Antal', 'Pris', 'Værdi'];
+  const colWidths = [30, 70, 20, 30, 30];
+  let x = 14;
+
+  doc.setFontSize(8);
+  headers.forEach((header, i) => {
+    doc.text(header, x, y);
+    x += colWidths[i];
+  });
+  y += 6;
+
+  report.vine.forEach(wine => {
+    if (y > 280) {
+      doc.addPage();
+      y = 20;
+    }
+
+    x = 14;
+    const værdi = (wine.antal || 0) * (wine.indkøbspris || 0);
+    const row = [
+      wine.vinId || '',
+      wine.navn || '',
+      wine.antal || 0,
+      (wine.indkøbspris || 0).toFixed(2),
+      værdi.toFixed(2)
+    ];
+
+    row.forEach((cell, i) => {
+      doc.text(String(cell).substring(0, 25), x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+  });
+
+  // Gem rapport i historik
+  const totalValueStr = report.total.formateret || '0';
+  const totalValueNum = parseFloat(totalValueStr.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  saveReportToHistory('VÆRDI-' + Date.now().toString().slice(-6), 'værdi', report.vine.length, totalValueNum);
+
+  if (download) {
+    doc.save('værdirapport.pdf');
+  } else {
+    // Åbn PDF i ny fane i stedet for download
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+}
+
+// Gør funktioner globale så de kan bruges i onclick handlers i HTML
+// Dette skal være sidst i filen, efter alle funktioner er defineret
+if (typeof window !== 'undefined') {
+  window.uploadWineImage = uploadWineImage;
+  window.deleteWineImage = deleteWineImage;
+  window.showImageModal = showImageModal;
+  window.showVineOversigt = showVineOversigt;
+  window.closeVineModal = closeVineModal;
+  window.generateLavStatusRapport = generateLavStatusRapport;
+  window.generateLagerReportViewOnly = generateLagerReportViewOnly;
+  window.generateLagerReportDownload = generateLagerReportDownload;
+  window.generateVærdiReportViewOnly = generateVærdiReportViewOnly;
+  window.updatePris = updatePris;
+  window.updateMinAntalAndStatus = updateMinAntalAndStatus;
+  window.scanQR = scanQR;
+  window.startQRScanner = startQRScanner;
+  window.updateCount = updateCount;
+  window.saveCount = saveCount;
+  window.importFile = doImport;
+  window.generateLabels = generateLabels;
+  window.printLabels = printLabels;
+  window.generateLagerReport = generateLagerReport;
+  window.generateVærdiReport = generateVærdiReport;
+  window.applyFilter = applyFilter;
+  window.clearFilter = clearFilter;
+  window.showPage = showPage;
+  window.viewReportPDF = viewReportPDF;
+  window.downloadReport = downloadReport;
+  window.archiveReport = archiveReport;
+  window.generateVærdiReportDownload = generateVærdiReportDownload;
+  
+  console.log('========================================');
+  console.log('=== APP.JS v24 FULLY LOADED ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Globale funktioner sat:', {
+    uploadWineImage: typeof uploadWineImage,
+    deleteWineImage: typeof deleteWineImage,
+    showImageModal: typeof showImageModal,
+    showVineOversigt: typeof showVineOversigt,
+    closeVineModal: typeof closeVineModal
+  });
+  console.log('✅ Billede upload: Korrekt implementeret');
+  console.log('✅ Rapport: Simplificeret - kun VIN-ID, Navn, Type, Land, Antal, Min, Pris');
+  console.log('✅ Labels: Sticky header fixet');
+  console.log('✅ Dashboard: Klikbare statistikker med popup');
+  console.log('✅ Autocomplete: Implementeret til søgning');
+  console.log('✅ Filtrering: Rettet til kalendermåned');
+  console.log('========================================');
+} else {
+  console.error('❌ ERROR: window is undefined!');
+}
