@@ -18,7 +18,6 @@ const importRoutes = require('./routes/import.routes');
 const countRoutes = require('./routes/count.routes');
 const reportsRoutes = require('./routes/reports.routes');
 const authRoutes = require('./routes/auth.routes');
-const authRoutes = require('./routes/auth.routes');
 
 app.use('/api/wines', winesRoutes);
 app.use('/api/import', importRoutes);
@@ -41,5 +40,6 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+
 
 
