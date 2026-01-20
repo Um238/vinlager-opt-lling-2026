@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#4A90E2">
   <title>CellarCount 2026 - Vinlager Optælling</title>
-      <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="manifest" href="manifest.json">
       <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
       <meta http-equiv="Pragma" content="no-cache">
       <meta http-equiv="Expires" content="0">
@@ -158,6 +161,7 @@
                 <button class="btn-count" onclick="updateCount(1)">+1</button>
               </div>
               <button class="btn-primary" onclick="saveCount()">Gem antal</button>
+              <button class="btn-secondary" onclick="finishCounting()" style="margin-top: 10px; width: 100%;">✅ Afslut optælling og generer rapport</button>
               <div id="count-status"></div>
             </div>
           </div>
@@ -515,4 +519,3 @@
       </script>
 </body>
 </html>
-
