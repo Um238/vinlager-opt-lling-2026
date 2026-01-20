@@ -33,11 +33,22 @@ function formatDanskPris(amount) {
 // Initialiser app
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initialiserer app...');
+  
+  // Initialiser auth system først
+  if (typeof auth !== 'undefined' && auth.initUsersStorage) {
+    auth.initUsersStorage();
+  }
+  
+  // Tjek login status
+  checkLoginStatus();
+  
   setupNavigation();
   
   // Vent lidt før vi loader data, så HTML er helt klar
   setTimeout(() => {
-    loadWines();
+    if (auth && auth.isLoggedIn()) {
+      loadWines();
+    }
   }, 100);
   
   setupFileInput();
@@ -47,6 +58,87 @@ document.addEventListener('DOMContentLoaded', () => {
     setupScanInput();
   }
 });
+
+// Tjek login status og vis korrekt skærm
+function checkLoginStatus() {
+  const loginScreen = document.getElementById('login-screen');
+  const mainHeader = document.getElementById('main-header');
+  const mainContent = document.getElementById('main-content');
+  
+  if (!loginScreen || !mainHeader || !mainContent) {
+    console.error('Login screen eller main content ikke fundet!');
+    return;
+  }
+  
+  if (auth && auth.isLoggedIn()) {
+    // Bruger er logget ind - vis app
+    loginScreen.style.display = 'none';
+    mainHeader.style.display = 'block';
+    mainContent.style.display = 'block';
+    
+    // Vis admin knap hvis admin
+    if (auth.isAdmin()) {
+      const adminBtn = document.getElementById('admin-nav-btn');
+      if (adminBtn) adminBtn.style.display = 'inline-block';
+    }
+  } else {
+    // Bruger ikke logget ind - vis login
+    loginScreen.style.display = 'flex';
+    mainHeader.style.display = 'none';
+    mainContent.style.display = 'none';
+  }
+}
+
+// Handle login
+function handleLogin(event) {
+  event.preventDefault();
+  const username = document.getElementById('login-username').value;
+  const password = document.getElementById('login-password').value;
+  const errorDiv = document.getElementById('login-error');
+  
+  if (!auth || !auth.login) {
+    errorDiv.textContent = 'Login system ikke tilgængelig. Tjek at auth.js er indlæst.';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  const result = auth.login(username, password);
+  
+  if (result.success) {
+    checkLoginStatus();
+    // Load data efter login
+    setTimeout(() => {
+      loadWines();
+    }, 100);
+  } else {
+    errorDiv.textContent = result.error || 'Login fejlede';
+    errorDiv.style.display = 'block';
+  }
+}
+
+// Handle logout
+function handleLogout() {
+  if (auth && auth.logout) {
+    auth.logout();
+    checkLoginStatus();
+    // Clear input fields
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+  }
+}
+
+// Show password reset (forbedret)
+function showPasswordReset() {
+  const emailOrUsername = prompt('Indtast din email eller brugernavn:');
+  if (!emailOrUsername) return;
+  
+  if (auth && auth.requestPasswordReset) {
+    const result = auth.requestPasswordReset(emailOrUsername);
+    alert(result.message || 'Hvis emailen/brugernavnet findes, er et reset link sendt.\n\nKontakt admin for at få password nulstillet.');
+  } else {
+    alert('Password reset funktion ikke tilgængelig. Kontakt admin.');
+  }
+}
 
 // Navigation
 function setupNavigation() {
@@ -62,8 +154,27 @@ function showPage(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   
-  document.getElementById(pageId).classList.add('active');
-  document.querySelector(`[data-page="${pageId}"]`).classList.add('active');
+  // Tjek om siden findes før vi prøver at vise den
+  const pageElement = document.getElementById(pageId);
+  const navButton = document.querySelector(`[data-page="${pageId}"]`);
+  
+  if (!pageElement) {
+    console.error(`Side med id "${pageId}" ikke fundet!`);
+    // Vis dashboard i stedet hvis siden ikke findes
+    const dashboardPage = document.getElementById('dashboard');
+    const dashboardBtn = document.querySelector(`[data-page="dashboard"]`);
+    if (dashboardPage) {
+      dashboardPage.classList.add('active');
+      if (dashboardBtn) dashboardBtn.classList.add('active');
+      updateDashboard();
+    }
+    return;
+  }
+  
+  pageElement.classList.add('active');
+  if (navButton) {
+    navButton.classList.add('active');
+  }
 
   // Load data når visning ændres
   if (pageId === 'dashboard') {
@@ -74,6 +185,8 @@ function showPage(pageId) {
     loadLabelsFilters();
   } else if (pageId === 'rapporter') {
     loadReportsHistory();
+  } else if (pageId === 'admin') {
+    loadAdminPanel();
   }
 }
 
@@ -1984,6 +2097,345 @@ if (typeof window !== 'undefined') {
   window.updatePris = updatePris;
   window.updateMinAntalAndStatus = updateMinAntalAndStatus;
   window.scanQR = scanQR;
+// ============================================
+// ADMIN PANEL FUNKTIONER
+// ============================================
+
+// Load admin panel data
+function loadAdminPanel() {
+  if (!auth || !auth.isAdmin()) {
+    return;
+  }
+  
+  // Opdater system info
+  const apiUrlEl = document.getElementById('admin-api-url');
+  if (apiUrlEl && typeof CONFIG !== 'undefined') {
+    apiUrlEl.textContent = CONFIG.API_URL || 'Ikke sat';
+  }
+  
+  const currentUserEl = document.getElementById('admin-current-user');
+  if (currentUserEl && auth.getCurrentUser()) {
+    currentUserEl.textContent = auth.getCurrentUser().username;
+  }
+  
+  const totalUsersEl = document.getElementById('admin-total-users');
+  if (totalUsersEl) {
+    const users = auth.getAllUsers();
+    totalUsersEl.textContent = users.length;
+  }
+  
+  const totalLogsEl = document.getElementById('admin-total-logs');
+  if (totalLogsEl) {
+    const logs = auth.getActivityLogs();
+    totalLogsEl.textContent = logs.length;
+  }
+  
+  // Load users og logs
+  renderUsers();
+  renderActivityLogs();
+}
+
+// Switch admin tab
+function switchAdminTab(tabName) {
+  // Skjul alle tabs
+  document.querySelectorAll('.admin-tab-content').forEach(tab => {
+    tab.style.display = 'none';
+  });
+  
+  // Fjern active fra alle knapper
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Vis valgt tab
+  const tabContent = document.getElementById(`admin-tab-${tabName}`);
+  const tabBtn = document.querySelector(`[data-tab="${tabName}"]`);
+  
+  if (tabContent) {
+    tabContent.style.display = 'block';
+  }
+  if (tabBtn) {
+    tabBtn.classList.add('active');
+  }
+  
+  // Load data når tab skifter
+  if (tabName === 'users') {
+    renderUsers();
+  } else if (tabName === 'logs') {
+    renderActivityLogs();
+  }
+}
+
+// Render users table
+function renderUsers() {
+  if (!auth || !auth.isAdmin()) return;
+  
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+  
+  const users = auth.getAllUsers();
+  tbody.innerHTML = '';
+  
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding: 1rem; text-align: center; color: #999;">Ingen brugere fundet</td></tr>';
+    return;
+  }
+  
+  const currentUser = auth.getCurrentUser();
+  
+  users.forEach(user => {
+    const row = document.createElement('tr');
+    const isCurrentUser = currentUser && user.username === currentUser.username;
+    const roleDisplay = auth.getRoleDisplayName ? auth.getRoleDisplayName(user.role) : user.role;
+    const createdDate = user.created ? new Date(user.created).toLocaleDateString('da-DK') : 'Ukendt';
+    
+    row.innerHTML = `
+      <td style="padding: 0.75rem;">${user.username} ${isCurrentUser ? '<span style="color: #2563eb;">(Dig)</span>' : ''}</td>
+      <td style="padding: 0.75rem;">${user.email || '-'}</td>
+      <td style="padding: 0.75rem;"><span style="background: #e3f2fd; padding: 2px 8px; border-radius: 3px; font-size: 0.9em;">${roleDisplay}</span></td>
+      <td style="padding: 0.75rem;">${createdDate}</td>
+      <td style="padding: 0.75rem;">
+        ${!isCurrentUser ? `
+          <button class="btn-secondary" onclick="editUser('${user.username}')" style="padding: 0.25rem 0.5rem; font-size: 0.9em; margin-right: 0.25rem;">Rediger</button>
+          <button class="btn-secondary" onclick="deleteUserConfirm('${user.username}')" style="padding: 0.25rem 0.5rem; font-size: 0.9em; background: #dc2626; color: white;">Slet</button>
+        ` : '<span style="color: #999;">-</span>'}
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+  
+  // Opdater user filter i log tab
+  updateLogUserFilter();
+}
+
+// Handle create user
+function handleCreateUser(event) {
+  event.preventDefault();
+  
+  if (!auth || !auth.isAdmin()) {
+    showError('Kun admin kan oprette brugere');
+    return;
+  }
+  
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const email = document.getElementById('new-email').value.trim();
+  const role = document.getElementById('new-role').value;
+  
+  const messageEl = document.getElementById('create-user-message');
+  
+  if (!username || !password || !email) {
+    messageEl.innerHTML = '<div class="error-message">Alle felter skal udfyldes</div>';
+    return;
+  }
+  
+  const result = auth.createUser(username, password, email, role);
+  
+  if (result.success) {
+    messageEl.innerHTML = '<div class="success-message">Bruger oprettet succesfuldt!</div>';
+    document.getElementById('create-user-form').reset();
+    renderUsers();
+    setTimeout(() => {
+      messageEl.innerHTML = '';
+    }, 3000);
+  } else {
+    messageEl.innerHTML = `<div class="error-message">${result.error}</div>`;
+  }
+}
+
+// Edit user
+function editUser(username) {
+  const users = auth.getAllUsers();
+  const user = users.find(u => u.username === username);
+  
+  if (!user) {
+    showError('Bruger ikke fundet');
+    return;
+  }
+  
+  const newEmail = prompt('Ny email:', user.email || '');
+  if (newEmail === null) return;
+  
+  const newRole = prompt('Ny rolle (user/overtjener/direktør/admin):', user.role || 'user');
+  if (newRole === null) return;
+  
+  const result = auth.updateUser(username, { email: newEmail, role: newRole });
+  
+  if (result.success) {
+    showSuccess('Bruger opdateret!');
+    renderUsers();
+  } else {
+    showError(result.error);
+  }
+}
+
+// Delete user confirm
+function deleteUserConfirm(username) {
+  if (!confirm(`Er du sikker på, at du vil slette brugeren "${username}"?`)) {
+    return;
+  }
+  
+  const result = auth.deleteUser(username);
+  
+  if (result.success) {
+    showSuccess('Bruger slettet!');
+    renderUsers();
+  } else {
+    showError(result.error);
+  }
+}
+
+// Render activity logs
+function renderActivityLogs() {
+  if (!auth || !auth.isAdmin()) return;
+  
+  const tbody = document.getElementById('logs-tbody');
+  if (!tbody) return;
+  
+  const usernameFilter = document.getElementById('log-filter-user')?.value || '';
+  const actionFilter = document.getElementById('log-filter-action')?.value || '';
+  const fromDate = document.getElementById('log-filter-from')?.value || '';
+  const toDate = document.getElementById('log-filter-to')?.value || '';
+  
+  const filter = {};
+  if (usernameFilter) filter.username = usernameFilter;
+  if (actionFilter) filter.action = actionFilter;
+  if (fromDate) filter.fromDate = fromDate;
+  if (toDate) filter.toDate = toDate;
+  
+  const logs = auth.getActivityLogs(filter);
+  tbody.innerHTML = '';
+  
+  if (logs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: #999;">Ingen logs fundet</td></tr>';
+    return;
+  }
+  
+  logs.forEach(log => {
+    const row = document.createElement('tr');
+    const actionDisplay = {
+      'login': '🔐 Login',
+      'logout': '🚪 Logout',
+      'stock_count': '📊 Optælling',
+      'user_created': '➕ Bruger oprettet',
+      'user_updated': '✏️ Bruger opdateret',
+      'user_deleted': '🗑️ Bruger slettet',
+      'password_reset': '🔑 Password reset',
+      'password_reset_requested': '📧 Password reset anmodet',
+      'password_changed': '🔐 Password ændret'
+    }[log.action] || log.action;
+    
+    row.innerHTML = `
+      <td style="padding: 0.75rem;">${log.date || log.timestamp}</td>
+      <td style="padding: 0.75rem;">${log.username || 'Ukendt'}</td>
+      <td style="padding: 0.75rem;">${actionDisplay}</td>
+      <td style="padding: 0.75rem; color: #666;">${log.details || '-'}</td>
+    `;
+    tbody.appendChild(row);
+  });
+  
+  // Opdater user filter
+  updateLogUserFilter();
+}
+
+// Update log user filter
+function updateLogUserFilter() {
+  const userSelect = document.getElementById('log-filter-user');
+  if (!userSelect) return;
+  
+  const users = auth.getAllUsers();
+  const currentValue = userSelect.value;
+  
+  userSelect.innerHTML = '<option value="">Alle brugere</option>';
+  users.forEach(user => {
+    const option = document.createElement('option');
+    option.value = user.username;
+    option.textContent = `${user.username} (${auth.getRoleDisplayName ? auth.getRoleDisplayName(user.role) : user.role})`;
+    userSelect.appendChild(option);
+  });
+  
+  if (users.find(u => u.username === currentValue)) {
+    userSelect.value = currentValue;
+  }
+}
+
+// Clear log filters
+function clearLogFilters() {
+  document.getElementById('log-filter-user').value = '';
+  document.getElementById('log-filter-action').value = '';
+  document.getElementById('log-filter-from').value = '';
+  document.getElementById('log-filter-to').value = '';
+  renderActivityLogs();
+}
+
+// Handle password reset
+function handlePasswordReset(event) {
+  event.preventDefault();
+  
+  if (!auth || !auth.isAdmin()) {
+    showError('Kun admin kan nulstille passwords');
+    return;
+  }
+  
+  const identifier = document.getElementById('reset-identifier').value.trim();
+  const newPassword = document.getElementById('reset-new-password').value;
+  
+  const messageEl = document.getElementById('password-reset-message');
+  
+  if (!identifier || !newPassword) {
+    messageEl.innerHTML = '<div class="error-message">Alle felter skal udfyldes</div>';
+    return;
+  }
+  
+  if (newPassword.length < 6) {
+    messageEl.innerHTML = '<div class="error-message">Password skal være mindst 6 tegn</div>';
+    return;
+  }
+  
+  const result = auth.resetPassword(identifier, newPassword);
+  
+  if (result.success) {
+    messageEl.innerHTML = `<div class="success-message">Password nulstillet for bruger: ${result.user.username}</div>`;
+    document.getElementById('password-reset-form').reset();
+    renderUsers();
+    setTimeout(() => {
+      messageEl.innerHTML = '';
+    }, 3000);
+  } else {
+    messageEl.innerHTML = `<div class="error-message">${result.error}</div>`;
+  }
+}
+
+// Export logs
+function exportLogs() {
+  if (!auth || !auth.isAdmin()) return;
+  
+  const logs = auth.getActivityLogs();
+  const csv = [
+    ['Dato/Tid', 'Bruger', 'Handling', 'Detaljer'],
+    ...logs.map(log => [
+      log.date || log.timestamp,
+      log.username || '',
+      log.action || '',
+      log.details || ''
+    ])
+  ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `activity_log_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+  window.handleLogin = handleLogin;
+  window.handleLogout = handleLogout;
+  window.showPasswordReset = showPasswordReset;
+  window.checkLoginStatus = checkLoginStatus;
   window.startQRScanner = startQRScanner;
   window.updateCount = updateCount;
   window.saveCount = saveCount;
@@ -1999,6 +2451,13 @@ if (typeof window !== 'undefined') {
   window.downloadReport = downloadReport;
   window.archiveReport = archiveReport;
   window.generateVærdiReportDownload = generateVærdiReportDownload;
+  window.switchAdminTab = switchAdminTab;
+  window.handleCreateUser = handleCreateUser;
+  window.editUser = editUser;
+  window.deleteUserConfirm = deleteUserConfirm;
+  window.clearLogFilters = clearLogFilters;
+  window.handlePasswordReset = handlePasswordReset;
+  window.exportLogs = exportLogs;
   
   console.log('========================================');
   console.log('=== APP.JS v24 FULLY LOADED ===');
