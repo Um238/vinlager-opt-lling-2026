@@ -15,7 +15,35 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
-  <header>
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen" style="display: none;">
+    <div class="login-card">
+      <h2>🍷 CellarCount 2026</h2>
+      <h3>Log ind</h3>
+      <div id="login-error" class="error-message" style="display: none;"></div>
+      <form id="login-form" onsubmit="handleLogin(event); return false;">
+        <div class="form-group">
+          <label>Brugernavn:</label>
+          <input type="text" id="login-username" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>Password:</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%;">Log ind</button>
+      </form>
+      <div style="margin-top: 1rem; text-align: center;">
+        <a href="#" onclick="showPasswordReset(); return false;" style="color: #2563eb; text-decoration: none;">Glemt password?</a>
+      </div>
+      <div style="margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 4px; font-size: 0.9em; color: #666;">
+        <strong>Standard login:</strong><br>
+        Brugernavn: <code>admin</code><br>
+        Password: <code>admin123</code>
+      </div>
+    </div>
+  </div>
+
+  <header id="main-header" style="display: none;">
     <h1>🍷 CellarCount 2026</h1>
     <nav>
       <button class="nav-btn active" data-page="dashboard">Dashboard</button>
@@ -24,10 +52,12 @@
       <button class="nav-btn" data-page="import">Import</button>
       <button class="nav-btn" data-page="labels">Labels</button>
       <button class="nav-btn" data-page="rapporter">Rapporter</button>
+      <button class="nav-btn" data-page="admin" id="admin-nav-btn" style="display: none;">Admin</button>
+      <button class="nav-btn" onclick="handleLogout()" style="background: #dc2626;">Log ud</button>
     </nav>
   </header>
 
-  <main>
+  <main id="main-content" style="display: none;">
     <!-- Dashboard -->
     <section id="dashboard" class="page active">
       <div class="card">
@@ -243,11 +273,176 @@
         </div>
       </div>
     </section>
+
+    <!-- Admin -->
+    <section id="admin" class="page">
+      <div class="card">
+        <h2>Admin Panel</h2>
+        
+        <!-- Admin Tabs -->
+        <div class="admin-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #ddd;">
+          <button class="admin-tab-btn active" data-tab="users" onclick="switchAdminTab('users')">👥 Brugere</button>
+          <button class="admin-tab-btn" data-tab="logs" onclick="switchAdminTab('logs')">📋 Log</button>
+          <button class="admin-tab-btn" data-tab="password-reset" onclick="switchAdminTab('password-reset')">🔐 Password Reset</button>
+          <button class="admin-tab-btn" data-tab="system" onclick="switchAdminTab('system')">⚙️ System</button>
+        </div>
+
+        <!-- Brugere Tab -->
+        <div id="admin-tab-users" class="admin-tab-content">
+          <h3>Brugeradministration</h3>
+          
+          <!-- Opret ny bruger -->
+          <div style="margin-bottom: 2rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <h4>Opret ny bruger</h4>
+            <form id="create-user-form" onsubmit="handleCreateUser(event); return false;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <label>Brugernavn: *</label>
+                  <input type="text" id="new-username" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Password: *</label>
+                  <input type="password" id="new-password" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Email: *</label>
+                  <input type="email" id="new-email" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Rolle: *</label>
+                  <select id="new-role" required style="width: 100%; padding: 0.5rem;">
+                    <option value="user">Bruger (Optælling)</option>
+                    <option value="overtjener">Overtjener</option>
+                    <option value="direktør">Direktør</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary">Opret bruger</button>
+              <div id="create-user-message" style="margin-top: 0.5rem;"></div>
+            </form>
+          </div>
+
+          <!-- Brugeroversigt -->
+          <div>
+            <h4>Brugeroversigt</h4>
+            <div class="table-container">
+              <table id="users-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.75rem; text-align: left;">Brugernavn</th>
+                    <th style="padding: 0.75rem; text-align: left;">Email</th>
+                    <th style="padding: 0.75rem; text-align: left;">Rolle</th>
+                    <th style="padding: 0.75rem; text-align: left;">Oprettet</th>
+                    <th style="padding: 0.75rem; text-align: left;">Handlinger</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody">
+                  <!-- Brugere indlæses her -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Log Tab -->
+        <div id="admin-tab-logs" class="admin-tab-content" style="display: none;">
+          <h3>Activity Log</h3>
+          
+          <!-- Log filtre -->
+          <div class="filter-bar" style="margin-bottom: 1rem;">
+            <select id="log-filter-user" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+              <option value="">Alle brugere</option>
+            </select>
+            <select id="log-filter-action" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+              <option value="">Alle handlinger</option>
+              <option value="login">Login</option>
+              <option value="logout">Logout</option>
+              <option value="stock_count">Optælling</option>
+              <option value="user_created">Bruger oprettet</option>
+              <option value="user_updated">Bruger opdateret</option>
+              <option value="user_deleted">Bruger slettet</option>
+              <option value="password_reset">Password reset</option>
+            </select>
+            <input type="date" id="log-filter-from" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+            <input type="date" id="log-filter-to" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+            <button class="btn-secondary" onclick="clearLogFilters()">Ryd filtre</button>
+          </div>
+
+          <!-- Log tabel -->
+          <div class="table-container">
+            <table id="logs-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                  <th style="padding: 0.75rem; text-align: left;">Dato/Tid</th>
+                  <th style="padding: 0.75rem; text-align: left;">Bruger</th>
+                  <th style="padding: 0.75rem; text-align: left;">Handling</th>
+                  <th style="padding: 0.75rem; text-align: left;">Detaljer</th>
+                </tr>
+              </thead>
+              <tbody id="logs-tbody">
+                <!-- Logs indlæses her -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Password Reset Tab -->
+        <div id="admin-tab-password-reset" class="admin-tab-content" style="display: none;">
+          <h3>Password Reset</h3>
+          
+          <div style="padding: 1rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">
+            <h4>Nulstil password for bruger</h4>
+            <p style="color: #666; margin-bottom: 1rem;">Indtast email eller brugernavn for at nulstille password</p>
+            <form id="password-reset-form" onsubmit="handlePasswordReset(event); return false;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <label>Email eller Brugernavn: *</label>
+                  <input type="text" id="reset-identifier" required style="width: 100%; padding: 0.5rem;" placeholder="email@example.com eller brugernavn">
+                </div>
+                <div>
+                  <label>Nyt Password: *</label>
+                  <input type="password" id="reset-new-password" required style="width: 100%; padding: 0.5rem;">
+                </div>
+              </div>
+              <button type="submit" class="btn-primary">Nulstil password</button>
+              <div id="password-reset-message" style="margin-top: 0.5rem;"></div>
+            </form>
+          </div>
+
+          <div style="padding: 1rem; background: #e3f2fd; border-radius: 4px;">
+            <h4>💡 Hjælp til glemt password</h4>
+            <p>Hvis en bruger har glemt deres password:</p>
+            <ol>
+              <li>Brugeren kan klikke på "Glemt password?" på login siden</li>
+              <li>Eller admin kan nulstille password her ved at indtaste brugerens email/brugernavn</li>
+              <li>I produktion vil der blive sendt en email med reset link</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- System Tab -->
+        <div id="admin-tab-system" class="admin-tab-content" style="display: none;">
+          <h3>System Information</h3>
+          <div style="padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <p><strong>Version:</strong> v26</p>
+            <p><strong>Backend URL:</strong> <span id="admin-api-url">-</span></p>
+            <p><strong>Nuværende bruger:</strong> <span id="admin-current-user">-</span></p>
+            <p><strong>Total brugere:</strong> <span id="admin-total-users">-</span></p>
+            <p><strong>Total log entries:</strong> <span id="admin-total-logs">-</span></p>
+            <div style="margin-top: 1rem;">
+              <button class="btn-secondary" onclick="location.reload()">Genindlæs side</button>
+              <button class="btn-secondary" onclick="exportLogs()" style="margin-left: 0.5rem;">📥 Eksporter log</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
       <script>
         // Force reload - clear all caches
-        const CACHE_VERSION = 'v24_' + Date.now();
+        const CACHE_VERSION = 'v26_' + Date.now();
         console.log('========================================');
         console.log('=== INDEX.HTML LOADING ===');
         console.log('Cache version:', CACHE_VERSION);
@@ -258,14 +453,15 @@
             names.forEach(name => caches.delete(name));
           });
         }
-        console.log('Loading config.js and app.js v24...');
+        console.log('Loading config.js and app.js v26...');
         console.log('========================================');
       </script>
-      <script src="config.js?v=24"></script>
+      <script src="config.js?v=26"></script>
+      <script src="auth.js?v=26"></script>
       <script>
-        console.log('Config loaded, now loading app.js...');
+        console.log('Config and auth loaded, now loading app.js...');
       </script>
-      <script src="app.js?v=24"></script>
+      <script src="app.js?v=26"></script>
     </main>
 
     <!-- Modal for vine oversigt -->
