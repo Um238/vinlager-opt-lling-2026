@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CellarCount 2026 - Vinlager Optælling</title>
-      <link rel="stylesheet" href="styles.css?v=18">
+      <link rel="stylesheet" href="styles.css?v=27">
       <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
       <meta http-equiv="Pragma" content="no-cache">
       <meta http-equiv="Expires" content="0">
@@ -456,12 +456,17 @@
         console.log('Loading config.js and app.js v26...');
         console.log('========================================');
       </script>
-      <script src="config.js?v=26"></script>
-      <script src="auth.js?v=26"></script>
+      <script src="config.js?v=27"></script>
+      <script src="auth.js?v=27"></script>
       <script>
         console.log('Config and auth loaded, now loading app.js...');
+        if (typeof auth === 'undefined') {
+          console.error('ERROR: auth.js ikke indlæst korrekt!');
+        } else {
+          console.log('✅ auth.js indlæst korrekt');
+        }
       </script>
-      <script src="app.js?v=26"></script>
+      <script src="app.js?v=27"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

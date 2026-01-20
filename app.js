@@ -34,29 +34,39 @@ function formatDanskPris(amount) {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initialiserer app...');
   
-  // Initialiser auth system først
-  if (typeof auth !== 'undefined' && auth.initUsersStorage) {
-    auth.initUsersStorage();
-  }
-  
-  // Tjek login status
-  checkLoginStatus();
-  
-  setupNavigation();
-  
-  // Vent lidt før vi loader data, så HTML er helt klar
+  // Vent lidt så alle scripts er indlæst
   setTimeout(() => {
-    if (auth && auth.isLoggedIn()) {
-      loadWines();
+    // Initialiser auth system først
+    if (typeof auth !== 'undefined' && auth.initUsersStorage) {
+      auth.initUsersStorage();
+    } else {
+      console.error('auth.js ikke indlæst!');
+      const errorDiv = document.getElementById('login-error');
+      if (errorDiv) {
+        errorDiv.textContent = 'Fejl: auth.js kunne ikke indlæses. Tjek browser console.';
+        errorDiv.style.display = 'block';
+      }
     }
-  }, 100);
-  
-  setupFileInput();
-  
-  // setupScanInput kun hvis funktionen findes
-  if (typeof setupScanInput === 'function') {
-    setupScanInput();
-  }
+    
+    // Tjek login status
+    checkLoginStatus();
+    
+    setupNavigation();
+    
+    // Vent lidt før vi loader data, så HTML er helt klar
+    setTimeout(() => {
+      if (auth && auth.isLoggedIn()) {
+        loadWines();
+      }
+    }, 100);
+    
+    setupFileInput();
+    
+    // setupScanInput kun hvis funktionen findes
+    if (typeof setupScanInput === 'function') {
+      setupScanInput();
+    }
+  }, 50);
 });
 
 // Tjek login status og vis korrekt skærm
@@ -67,17 +77,38 @@ function checkLoginStatus() {
   
   if (!loginScreen || !mainHeader || !mainContent) {
     console.error('Login screen eller main content ikke fundet!');
+    // Vis login screen hvis elementer mangler
+    if (loginScreen) {
+      loginScreen.style.display = 'flex';
+    }
     return;
   }
   
-  if (auth && auth.isLoggedIn()) {
+  // Tjek om auth er tilgængelig
+  if (typeof auth === 'undefined' || !auth) {
+    console.error('auth ikke defineret! Tjek at auth.js er indlæst.');
+    // Vis login screen hvis auth ikke er tilgængelig
+    loginScreen.style.display = 'flex';
+    mainHeader.style.display = 'none';
+    mainContent.style.display = 'none';
+    
+    // Vis fejlbesked
+    const errorDiv = document.getElementById('login-error');
+    if (errorDiv) {
+      errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Tjek browser console.';
+      errorDiv.style.display = 'block';
+    }
+    return;
+  }
+  
+  if (auth.isLoggedIn && auth.isLoggedIn()) {
     // Bruger er logget ind - vis app
     loginScreen.style.display = 'none';
     mainHeader.style.display = 'block';
     mainContent.style.display = 'block';
     
     // Vis admin knap hvis admin
-    if (auth.isAdmin()) {
+    if (auth.isAdmin && auth.isAdmin()) {
       const adminBtn = document.getElementById('admin-nav-btn');
       if (adminBtn) adminBtn.style.display = 'inline-block';
     }
@@ -92,26 +123,69 @@ function checkLoginStatus() {
 // Handle login
 function handleLogin(event) {
   event.preventDefault();
-  const username = document.getElementById('login-username').value;
-  const password = document.getElementById('login-password').value;
+  const usernameInput = document.getElementById('login-username');
+  const passwordInput = document.getElementById('login-password');
   const errorDiv = document.getElementById('login-error');
   
-  if (!auth || !auth.login) {
-    errorDiv.textContent = 'Login system ikke tilgængelig. Tjek at auth.js er indlæst.';
+  if (!usernameInput || !passwordInput) {
+    console.error('Login input felter ikke fundet!');
+    return;
+  }
+  
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  
+  if (!errorDiv) {
+    console.error('Error div ikke fundet!');
+    return;
+  }
+  
+  // Tjek om auth er tilgængelig
+  if (typeof auth === 'undefined' || !auth) {
+    errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Tjek at auth.js er indlæst korrekt.';
+    errorDiv.style.display = 'block';
+    console.error('auth ikke defineret!');
+    return;
+  }
+  
+  if (!auth.login) {
+    errorDiv.textContent = 'Fejl: Login funktion ikke tilgængelig. Tjek at auth.js er indlæst korrekt.';
+    errorDiv.style.display = 'block';
+    console.error('auth.login ikke defineret!');
+    return;
+  }
+  
+  // Valider input
+  if (!username || !password) {
+    errorDiv.textContent = 'Indtast venligst både brugernavn og password.';
     errorDiv.style.display = 'block';
     return;
   }
   
-  const result = auth.login(username, password);
-  
-  if (result.success) {
-    checkLoginStatus();
-    // Load data efter login
-    setTimeout(() => {
-      loadWines();
-    }, 100);
-  } else {
-    errorDiv.textContent = result.error || 'Login fejlede';
+  try {
+    const result = auth.login(username, password);
+    
+    if (result && result.success) {
+      // Ryd fejlbesked
+      errorDiv.style.display = 'none';
+      errorDiv.textContent = '';
+      
+      // Opdater UI
+      checkLoginStatus();
+      
+      // Load data efter login
+      setTimeout(() => {
+        if (typeof loadWines === 'function') {
+          loadWines();
+        }
+      }, 100);
+    } else {
+      errorDiv.textContent = result?.error || 'Login fejlede. Tjek brugernavn og password.';
+      errorDiv.style.display = 'block';
+    }
+  } catch (error) {
+    console.error('Login fejl:', error);
+    errorDiv.textContent = 'Fejl ved login: ' + error.message;
     errorDiv.style.display = 'block';
   }
 }
