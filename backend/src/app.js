@@ -17,11 +17,13 @@ const winesRoutes = require('./routes/wines.routes');
 const importRoutes = require('./routes/import.routes');
 const countRoutes = require('./routes/count.routes');
 const reportsRoutes = require('./routes/reports.routes');
+const authRoutes = require('./routes/auth.routes');
 
 app.use('/api/wines', winesRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/count', countRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -37,3 +39,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+
