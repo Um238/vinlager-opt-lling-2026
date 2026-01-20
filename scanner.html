@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#4A90E2">
+  <title>Vinlager Scanner</title>
+  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    /* Mobil-optimeret scanner side */
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    
+    .scanner-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      background: #000;
+    }
+    
+    .scanner-header {
+      background: rgba(74, 144, 226, 0.95);
+      color: white;
+      padding: 15px;
+      text-align: center;
+      z-index: 10;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    .scanner-header h1 {
+      margin: 0;
+      font-size: 1.2em;
+    }
+    
+    .video-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #qr-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .scan-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 250px;
+      height: 250px;
+      border: 3px solid #4A90E2;
+      border-radius: 10px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    }
+    
+    .wine-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      max-height: 60vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+      z-index: 20;
+    }
+    
+    .wine-panel.show {
+      transform: translateY(0);
+    }
+    
+    .wine-panel-content {
+      padding: 20px;
+    }
+    
+    .wine-image {
+      width: 100%;
+      max-width: 200px;
+      height: auto;
+      border-radius: 8px;
+      margin: 10px auto;
+      display: block;
+    }
+    
+    .count-controls {
+      margin-top: 15px;
+    }
+    
+    .count-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin: 15px 0;
+    }
+    
+    .btn-count {
+      width: 60px;
+      height: 60px;
+      font-size: 1.5em;
+      border-radius: 50%;
+      border: 2px solid #4A90E2;
+      background: white;
+      color: #4A90E2;
+      font-weight: bold;
+    }
+    
+    .btn-save {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.2em;
+      margin-top: 10px;
+    }
+    
+    .btn-close-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #f44336;
+      color: white;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    
+    .status-message {
+      text-align: center;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    
+    .status-success {
+      background: #4CAF50;
+      color: white;
+    }
+    
+    .status-error {
+      background: #f44336;
+      color: white;
+    }
+    
+    #count-input {
+      width: 100%;
+      padding: 15px;
+      font-size: 1.5em;
+      text-align: center;
+      border: 2px solid #4A90E2;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    
+    .wine-info {
+      font-size: 0.9em;
+      line-height: 1.6;
+    }
+    
+    .wine-info strong {
+      display: inline-block;
+      min-width: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="scanner-container">
+    <div class="scanner-header">
+      <h1>🍷 Vinlager Scanner</h1>
+      <div id="status-message" class="status-message" style="display: none;"></div>
+    </div>
+    
+    <div class="video-container">
+      <video id="qr-video" autoplay playsinline></video>
+      <canvas id="qr-canvas" style="display: none;"></canvas>
+      <div class="scan-overlay"></div>
+    </div>
+    
+    <div class="wine-panel" id="wine-panel">
+      <button class="btn-close-panel" onclick="closeWinePanel()">×</button>
+      <div class="wine-panel-content">
+        <h2 id="wine-navn"></h2>
+        <div id="wine-image-container"></div>
+        <div class="wine-info">
+          <div><strong>VIN-ID:</strong> <span id="wine-vinId"></span></div>
+          <div><strong>Nuværende:</strong> <span id="wine-antal" style="font-size: 1.5em; font-weight: bold; color: #4A90E2;"></span></div>
+          <div><strong>Reol:</strong> <span id="wine-reol"></span> | <strong>Hylde:</strong> <span id="wine-hylde"></span></div>
+        </div>
+        
+        <div class="count-controls">
+          <input type="number" id="count-input" placeholder="Indtast antal">
+          <div class="count-buttons">
+            <button class="btn-count" onclick="updateCount(-5)">-5</button>
+            <button class="btn-count" onclick="updateCount(-1)">-1</button>
+            <button class="btn-count" onclick="updateCount(1)">+1</button>
+            <button class="btn-count" onclick="updateCount(5)">+5</button>
+          </div>
+          <button class="btn-primary btn-save" onclick="saveCount()">💾 Gem antal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js?v=29"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script>
+    // Global state
+    let qrStream = null;
+    let qrScanning = false;
+    let currentWine = null;
+    let currentCount = 0;
+    
+    // Helper funktion til at få CONFIG
+    function getConfig() {
+      return window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : {
+        API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
+        TIMEOUT: 10000
+      });
+    }
+    
+    // API call
+    async function apiCall(endpoint, options = {}) {
+      const config = getConfig();
+      const response = await fetch(`${config.API_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API fejl: ${response.status}`);
+      }
+      
+      return await response.json();
+    }
+    
+    // Start scanner ved load
+    window.addEventListener('DOMContentLoaded', () => {
+      startQRScanner();
+    });
+    
+    // Start QR scanner
+    async function startQRScanner() {
+      const video = document.getElementById('qr-video');
+      const canvas = document.getElementById('qr-canvas');
+      
+      if (qrScanning) return;
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        });
+        
+        qrStream = stream;
+        video.srcObject = stream;
+        qrScanning = true;
+        video.play();
+        
+        // Scan loop - FORTSÆT EFTER SCAN
+        function scanFrame() {
+          if (!qrScanning) return;
+          
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            if (typeof jsQR !== 'undefined') {
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
+              if (code && code.data) {
+                handleScan(code.data);
+              }
+            }
+          }
+          requestAnimationFrame(scanFrame);
+        }
+        scanFrame();
+      } catch (error) {
+        console.error('Kamera fejl:', error);
+        showStatus('Kunne ikke tilgå kamera. Tjek tilladelser.', 'error');
+      }
+    }
+    
+    // Håndter scan - FORTSÆT SCANNING
+    async function handleScan(codeData) {
+      // Ignorer hvis panel allerede er åbent
+      if (document.getElementById('wine-panel').classList.contains('show')) {
+        return;
+      }
+      
+      try {
+        currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData)}`);
+        showWineDetails(currentWine);
+        showStatus('Vin fundet!', 'success');
+      } catch (error) {
+        showStatus('Vin ikke fundet: ' + codeData, 'error');
+      }
+    }
+    
+    // Vis vin detaljer
+    function showWineDetails(wine) {
+      document.getElementById('wine-navn').textContent = wine.navn || 'Ukendt vin';
+      document.getElementById('wine-vinId').textContent = wine.vinId || '';
+      document.getElementById('wine-antal').textContent = wine.antal || 0;
+      document.getElementById('wine-reol').textContent = wine.reol || '';
+      document.getElementById('wine-hylde').textContent = wine.hylde || '';
+      
+      currentCount = wine.antal || 0;
+      document.getElementById('count-input').value = '';
+      
+      // Vis billede hvis tilgængelig
+      const imgContainer = document.getElementById('wine-image-container');
+      if (wine.billede) {
+        imgContainer.innerHTML = `<img src="${getConfig().API_URL}/uploads/images/${wine.billede}" alt="${wine.navn}" class="wine-image">`;
+      } else {
+        imgContainer.innerHTML = '';
+      }
+      
+      // Vis panel
+      document.getElementById('wine-panel').classList.add('show');
+    }
+    
+    // Opdater antal
+    function updateCount(change) {
+      const directInput = document.getElementById('count-input').value;
+      if (directInput) {
+        currentCount = parseInt(directInput);
+      } else {
+        currentCount += change;
+      }
+      document.getElementById('count-input').value = currentCount;
+      document.getElementById('wine-antal').textContent = currentCount;
+    }
+    
+    // Gem antal
+    async function saveCount() {
+      if (!currentWine) return;
+      
+      const newCount = parseInt(document.getElementById('count-input').value) || currentCount;
+      
+      try {
+        await apiCall(`/api/count/${currentWine.vinId}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            nytAntal: newCount
+          })
+        });
+        
+        showStatus('Antal gemt!', 'success');
+        currentWine.antal = newCount;
+        document.getElementById('wine-antal').textContent = newCount;
+        
+        // Luk panel efter 1 sekund og fortsæt scanning
+        setTimeout(() => {
+          closeWinePanel();
+        }, 1000);
+      } catch (error) {
+        showStatus('Fejl ved gemning: ' + error.message, 'error');
+      }
+    }
+    
+    // Luk vin panel
+    function closeWinePanel() {
+      document.getElementById('wine-panel').classList.remove('show');
+      currentWine = null;
+      // Scanner fortsætter automatisk
+    }
+    
+    // Vis status besked
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('status-message');
+      statusEl.textContent = message;
+      statusEl.className = `status-message status-${type}`;
+      statusEl.style.display = 'block';
+      
+      setTimeout(() => {
+        statusEl.style.display = 'none';
+      }, 3000);
+    }
+    
+    // Input listener
+    document.getElementById('count-input').addEventListener('input', (e) => {
+      const value = parseInt(e.target.value);
+      if (!isNaN(value)) {
+        currentCount = value;
+        document.getElementById('wine-antal').textContent = value;
+      }
+    });
+  </script>
+</body>
+</html>
