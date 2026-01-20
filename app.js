@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v24
+// VINLAGER OPTÆLLING 2026 - APP.JS v28
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v11');
+console.log('Version: v28');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -17,9 +17,33 @@ let currentCount = null;
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS START LOADING ===');
-console.log('Version: v24');
+console.log('Version: v28');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
+
+// Tjek om CONFIG er defineret
+if (typeof CONFIG === 'undefined') {
+  console.error('❌ FEJL: CONFIG er ikke defineret! Tjek at config.js er indlæst før app.js');
+  // Prøv at definere en fallback
+  const CONFIG = {
+    API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
+    TIMEOUT: 10000
+  };
+  window.CONFIG = CONFIG;
+  console.warn('⚠️  Bruger fallback CONFIG:', CONFIG);
+} else {
+  console.log('✅ CONFIG er defineret:', CONFIG);
+  // Sørg for at CONFIG også er tilgængelig globalt
+  window.CONFIG = CONFIG;
+}
+
+// Helper funktion til at få CONFIG (sikrer altid at vi har en)
+function getConfig() {
+  return window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : {
+    API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
+    TIMEOUT: 10000
+  });
+}
 
 // Formatér tal i dansk format (punktum som tusindseperator, komma som decimalseparator)
 // Eksempel: 137505.00 -> "137.505,00"
@@ -266,8 +290,14 @@ function showPage(pageId) {
 
 // API calls
 async function apiCall(endpoint, options = {}) {
+  // Sikr at CONFIG er tilgængelig
+  const config = getConfig();
+  if (!config || !config.API_URL) {
+    console.error('❌ CONFIG er ikke defineret!');
+    throw new Error('Backend konfiguration mangler');
+  }
   try {
-    const response = await fetch(`${CONFIG.API_URL}${endpoint}`, {
+    const response = await fetch(`${config.API_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -587,7 +617,7 @@ function renderLager() {
                onchange="if(typeof window !== 'undefined' && window.uploadWineImage) { window.uploadWineImage(this, '${wine.vinId}'); } else { console.error('uploadWineImage ikke fundet'); alert('Upload funktion ikke fundet. Tryk Ctrl+Shift+R for at genindlæse.'); }">
         ${wine.billede ? `
           <div onclick="const input = document.getElementById('image-input-${wine.vinId}'); if(input) input.click();" style="cursor: pointer; display: inline-block; position: relative;">
-            <img src="${CONFIG.API_URL}/uploads/images/${wine.billede}" 
+            <img src="${getConfig().API_URL}/uploads/images/${wine.billede}" 
                  alt="${wine.navn}" 
                  style="width: 60px; height: 60px; object-fit: cover; border: 2px solid #007bff; border-radius: 4px;"
                  onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='block';">
@@ -971,7 +1001,7 @@ function showWineDetails(wine) {
   // Vis billede hvis tilgængelig
   const imgContainer = document.getElementById('wine-billede-container');
   if (wine.billede) {
-    imgContainer.innerHTML = `<img src="${CONFIG.API_URL}/uploads/images/${wine.billede}" alt="${wine.navn}">`;
+    imgContainer.innerHTML = `<img src="${getConfig().API_URL}/uploads/images/${wine.billede}" alt="${wine.navn}">`;
   } else {
     imgContainer.innerHTML = '';
   }
@@ -1145,7 +1175,7 @@ async function doImport() {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const endpoint = isExcel ? '/api/import/excel' : '/api/import/csv';
 
-    const response = await fetch(`${CONFIG.API_URL}${endpoint}`, {
+    const response = await fetch(`${getConfig().API_URL}${endpoint}`, {
       method: 'POST',
       body: formData
     });
@@ -1328,7 +1358,7 @@ async function uploadWineImage(input, vinId) {
   formData.append('billede', file);
   
   try {
-    const url = `${CONFIG.API_URL}/api/wines/${vinId}/image`;
+    const url = `${getConfig().API_URL}/api/wines/${vinId}/image`;
     console.log('Upload URL:', url);
     
     const response = await fetch(url, {
@@ -2184,7 +2214,7 @@ function loadAdminPanel() {
   // Opdater system info
   const apiUrlEl = document.getElementById('admin-api-url');
   if (apiUrlEl && typeof CONFIG !== 'undefined') {
-    apiUrlEl.textContent = CONFIG.API_URL || 'Ikke sat';
+    apiUrlEl.textContent = getConfig().API_URL || 'Ikke sat';
   }
   
   const currentUserEl = document.getElementById('admin-current-user');
