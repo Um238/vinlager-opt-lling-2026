@@ -201,6 +201,8 @@ function handleLogin(event) {
       setTimeout(() => {
         if (typeof loadWines === 'function') {
           loadWines();
+          // Start auto-opdatering efter login
+          startAutoUpdate();
         }
       }, 100);
     } else {
@@ -216,6 +218,9 @@ function handleLogin(event) {
 
 // Handle logout
 function handleLogout() {
+  // Stop auto-opdatering ved logout
+  stopAutoUpdate();
+  
   if (auth && auth.logout) {
     auth.logout();
     checkLoginStatus();
@@ -943,7 +948,8 @@ async function startQRScanner() {
           if (code && code.data) {
             document.getElementById('scan-input').value = code.data;
             scanQR();
-            stopQRScanner();
+            // FORTSÆT SCANNING - ikke stop scanner
+            // stopQRScanner(); // Fjernet - scanner fortsætter
           }
         }
       }
@@ -1096,6 +1102,13 @@ async function saveCount() {
       allWines[index].antal = result.nytAntal;
     }
 
+    // Ryd input og scan-input så scanneren er klar til næste scan
+    document.getElementById('count-input').value = '';
+    document.getElementById('scan-input').value = '';
+    
+    // Hvis scanner kører, fortsæt scanning (ikke stop)
+    // Scanner fortsætter automatisk
+
     updateDashboard();
     // Opdater lager visning (inkl. farvekodning baseret på nyt antal)
     await loadWines();
@@ -1104,6 +1117,9 @@ async function saveCount() {
     // Ryd input
     document.getElementById('count-input').value = '';
     document.getElementById('scan-input').value = '';
+    
+    // Opdater auto-opdatering efter gem
+    // (loadWines kalder allerede updateDashboard, så data er opdateret)
     
     setTimeout(() => {
       document.getElementById('count-status').innerHTML = '';
@@ -2536,6 +2552,109 @@ function exportLogs() {
   document.body.removeChild(link);
 }
 
+// Afslut optælling og generer rapport automatisk
+async function finishCounting() {
+  if (!confirm('Er du sikker på at du vil afslutte optællingen? En rapport vil blive genereret.')) {
+    return;
+  }
+  
+  try {
+    // Generer lagerrapport automatisk
+    const wines = await apiCall('/api/reports/lager');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Lagerrapport - Optælling Afsluttet', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+    y += 10;
+    
+    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 25, 25, 15, 15, 30];
+    let x = 14;
+    
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+    
+    let totalVærdi = 0;
+    
+    wines.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+      
+      const pris = wine.indkøbspris || 0;
+      const værdi = pris * (wine.antal || 0);
+      totalVærdi += værdi;
+      
+      x = 14;
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.type || '',
+        wine.land || '',
+        wine.antal || 0,
+        wine.minAntal || 24,
+        pris.toFixed(2)
+      ];
+      
+      row.forEach((cell, i) => {
+        doc.text(String(cell).substring(0, 25), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+    
+    // Total
+    y += 5;
+    doc.setFontSize(10);
+    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    
+    // Gem rapport i historik
+    saveReportToHistory('OPTÆLLING-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+    
+    // Vis popup med mulighed for at se eller downloade
+    const reportBlob = doc.output('blob');
+    const reportUrl = URL.createObjectURL(reportBlob);
+    
+    // Vis popup
+    const popup = document.createElement('div');
+    popup.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 10000; max-width: 400px; text-align: center;';
+    popup.innerHTML = `
+      <h2 style="margin-top: 0;">✅ Optælling afsluttet!</h2>
+      <p>Rapport er genereret med ${wines.length} vine.</p>
+      <p><strong>Total værdi: ${formatDanskPris(totalVærdi)} kr.</strong></p>
+      <div style="margin-top: 20px;">
+        <button onclick="window.open('${reportUrl}', '_blank')" class="btn-primary" style="margin: 5px; padding: 10px 20px;">👁️ Vis rapport</button>
+        <button onclick="doc.save('lagerrapport_optælling.pdf'); this.parentElement.parentElement.remove();" class="btn-secondary" style="margin: 5px; padding: 10px 20px;">📥 Download</button>
+        <button onclick="this.parentElement.parentElement.remove(); URL.revokeObjectURL('${reportUrl}');" class="btn-secondary" style="margin: 5px; padding: 10px 20px;">Luk</button>
+      </div>
+    `;
+    document.body.appendChild(popup);
+    
+    // Gem doc globalt så download knappen kan bruge den
+    window.finishCountingDoc = doc;
+    
+  } catch (error) {
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+}
+
   window.handleLogin = handleLogin;
   window.handleLogout = handleLogout;
   window.showPasswordReset = showPasswordReset;
@@ -2543,6 +2662,7 @@ function exportLogs() {
   window.startQRScanner = startQRScanner;
   window.updateCount = updateCount;
   window.saveCount = saveCount;
+  window.finishCounting = finishCounting;
   window.importFile = doImport;
   window.generateLabels = generateLabels;
   window.printLabels = printLabels;
