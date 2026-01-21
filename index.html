@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Vinlager">
-  <link rel="apple-touch-icon" href="icon-app-192.png">
+  <link rel="apple-touch-icon" href="icon-app.png">
   <title>CellarCount 2026 - Vinlager Optælling</title>
   <link rel="stylesheet" href="styles.css?v=29">
   <link rel="manifest" href="manifest-app.json">
@@ -23,6 +23,31 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
+  <script>
+    // PWA: register service worker (required for "Add to Home Screen" on Android/Chrome)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+
+    // Optional: show install prompt button on Android (Chrome/Edge)
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+    async function promptInstall() {
+      if (!deferredPrompt) {
+        alert('Install/genvej: Åbn browser-menuen og vælg \"Tilføj til startskærm\".');
+        return;
+      }
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    }
+    window.promptInstall = promptInstall;
+  </script>
   <!-- Login Screen -->
   <div id="login-screen" class="login-screen" style="display: flex;">
     <div class="login-card">

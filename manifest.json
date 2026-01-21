@@ -9,13 +9,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon-scanner-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-scanner-512.png",
+      "src": "icon-scanner.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
