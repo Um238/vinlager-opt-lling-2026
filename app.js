@@ -266,12 +266,30 @@ function handleLogin(event) {
   }
   
   try {
+    // Tjek om auth er klar
+    if (typeof auth === 'undefined' || !auth || !auth.login) {
+      errorDiv.textContent = 'Fejl: Authentication system ikke klar. Vent venligst et øjeblik og prøv igen.';
+      errorDiv.style.display = 'block';
+      console.error('auth ikke klar:', typeof auth, auth);
+      
+      // Prøv igen efter 1 sekund
+      setTimeout(() => {
+        if (typeof auth !== 'undefined' && auth && auth.login) {
+          handleLogin(event);
+        }
+      }, 1000);
+      return;
+    }
+    
     const result = auth.login(username, password);
     
     if (result && result.success) {
       // Ryd fejlbesked
       errorDiv.style.display = 'none';
       errorDiv.textContent = '';
+      
+      // Ryd password felt
+      passwordInput.value = '';
       
       // Opdater UI
       checkLoginStatus();
@@ -287,11 +305,15 @@ function handleLogin(event) {
     } else {
       errorDiv.textContent = result?.error || 'Login fejlede. Tjek brugernavn og password.';
       errorDiv.style.display = 'block';
+      // Ryd password felt ved fejl
+      passwordInput.value = '';
     }
   } catch (error) {
     console.error('Login fejl:', error);
     errorDiv.textContent = 'Fejl ved login: ' + error.message;
     errorDiv.style.display = 'block';
+    // Ryd password felt ved fejl
+    passwordInput.value = '';
   }
 }
 
