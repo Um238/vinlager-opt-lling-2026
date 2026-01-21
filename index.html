@@ -47,6 +47,30 @@
     }
     window.promptInstall = promptInstall;
   </script>
+  <!-- QR-kode knap (altid synlig) -->
+  <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+    <button onclick="showScannerQRModal()" style="background: #4A90E2; color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="Vis QR-kode til scanner">
+      📱
+    </button>
+  </div>
+  
+  <!-- QR-kode Modal -->
+  <div id="scanner-qr-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; position: relative;">
+      <button onclick="closeScannerQRModal()" style="position: absolute; top: 10px; right: 10px; background: #f44336; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.2em;">×</button>
+      <h3 style="margin-top: 0;">📱 Få scanner-link på din telefon</h3>
+      <p>Scan QR-koden nedenfor med din telefon for at åbne scanneren direkte:</p>
+      <div id="scanner-qr-container" style="text-align: center; margin: 20px 0;">
+        <div id="scanner-qr-code" style="display: inline-block; padding: 20px; background: white; border-radius: 8px;"></div>
+      </div>
+      <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
+        <strong>Direkte link:</strong><br>
+        <code id="scanner-link-text" style="background: #f5f5f5; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px; word-break: break-all; font-size: 0.85em;"></code>
+      </p>
+      <button class="btn-secondary" onclick="copyScannerLink()" style="margin-top: 10px;">📋 Kopiér link</button>
+    </div>
+  </div>
+
   <!-- Login Screen -->
   <div id="login-screen" class="login-screen" style="display: flex;">
     <div class="login-card">
@@ -95,30 +119,6 @@
     <section id="dashboard" class="page active">
       <div class="card">
         <h2>Dashboard</h2>
-        
-        <!-- QR-kode knap -->
-        <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-          <button onclick="showScannerQRModal()" style="background: #4A90E2; color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="Vis QR-kode til scanner">
-            📱
-          </button>
-        </div>
-        
-        <!-- QR-kode Modal -->
-        <div id="scanner-qr-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
-          <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; position: relative;">
-            <button onclick="closeScannerQRModal()" style="position: absolute; top: 10px; right: 10px; background: #f44336; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.2em;">×</button>
-            <h3 style="margin-top: 0;">📱 Få scanner-link på din telefon</h3>
-            <p>Scan QR-koden nedenfor med din telefon for at åbne scanneren direkte:</p>
-            <div id="scanner-qr-container" style="text-align: center; margin: 20px 0;">
-              <div id="scanner-qr-code" style="display: inline-block; padding: 20px; background: white; border-radius: 8px;"></div>
-            </div>
-            <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
-              <strong>Direkte link:</strong><br>
-              <code id="scanner-link-text" style="background: #f5f5f5; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px; word-break: break-all; font-size: 0.85em;"></code>
-            </p>
-            <button class="btn-secondary" onclick="copyScannerLink()" style="margin-top: 10px;">📋 Kopiér link</button>
-          </div>
-        </div>
         
         <div class="stats-grid">
           <div class="stat-card clickable" onclick="showVineOversigt('alle')">

@@ -91,6 +91,33 @@ function stopAutoUpdate() {
   }
 }
 
+// Eksporter QR-funktioner globalt umiddelbart (før DOMContentLoaded)
+if (typeof window !== 'undefined') {
+  window.showScannerQRModal = function() {
+    const modal = document.getElementById('scanner-qr-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      if (typeof generateScannerQR === 'function') {
+        generateScannerQR();
+      } else {
+        // Vent lidt hvis funktionen ikke er klar endnu
+        setTimeout(() => {
+          if (typeof generateScannerQR === 'function') {
+            generateScannerQR();
+          }
+        }, 100);
+      }
+    }
+  };
+  
+  window.closeScannerQRModal = function() {
+    const modal = document.getElementById('scanner-qr-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  };
+}
+
 // Initialiser app
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initialiserer app...');
@@ -1567,10 +1594,33 @@ function showReportsPage() {
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
-    // Hent rapporter fra localStorage (kunne også være fra backend)
-    const saved = localStorage.getItem('reportsHistory');
-    if (saved) {
-      reportsHistory = JSON.parse(saved);
+    // Prøv først at hente fra backend
+    try {
+      const backendReports = await apiCall('/api/reports/history');
+      if (backendReports && Array.isArray(backendReports) && backendReports.length > 0) {
+        reportsHistory = backendReports.map(r => ({
+          id: r.id,
+          date: r.date,
+          name: r.name,
+          type: r.type,
+          wineCount: r.wineCount,
+          totalValue: r.totalValue,
+          location: r.location || 'Lokal',
+          archived: r.archived === 1 || r.archived === true
+        }));
+        // Gem også i localStorage som backup
+        localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+        console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
+      } else {
+        throw new Error('Ingen rapporter i backend');
+      }
+    } catch (backendError) {
+      console.warn('Kunne ikke hente fra backend, bruger localStorage:', backendError);
+      // Fallback til localStorage
+      const saved = localStorage.getItem('reportsHistory');
+      if (saved) {
+        reportsHistory = JSON.parse(saved);
+      }
     }
     // Opdater lokation filter før vi renderer tabellen
     updateLocationFilter();
@@ -1581,9 +1631,9 @@ async function loadReportsHistory() {
 }
 
 // Gem rapport i historik
-function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
+async function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
   const report = {
-    id: Date.now().toString(),
+    reportId: Date.now().toString(),
     date: new Date().toLocaleString('da-DK'),
     name: reportName,
     type: reportType,
@@ -1593,7 +1643,27 @@ function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
     archived: false
   };
   
-  reportsHistory.unshift(report); // Tilføj øverst
+  // Gem i backend
+  try {
+    await apiCall('/api/reports/save', 'POST', report);
+    console.log('✅ Rapport gemt i backend');
+  } catch (error) {
+    console.error('Fejl ved gemning i backend:', error);
+  }
+  
+  // Gem også i localStorage som backup
+  const reportForLocalStorage = {
+    id: report.reportId,
+    date: report.date,
+    name: report.name,
+    type: report.type,
+    wineCount: report.wineCount,
+    totalValue: report.totalValue,
+    location: report.location,
+    archived: report.archived
+  };
+  
+  reportsHistory.unshift(reportForLocalStorage); // Tilføj øverst
   if (reportsHistory.length > 100) {
     reportsHistory = reportsHistory.slice(0, 100); // Begræns til 100 rapporter
   }
@@ -2774,6 +2844,13 @@ async function finishCounting() {
   window.showScannerQRModal = showScannerQRModal;
   window.closeScannerQRModal = closeScannerQRModal;
   window.copyScannerLink = copyScannerLink;
+  
+  // Sørg for at QR-funktioner er tilgængelige umiddelbart (også før login)
+  if (typeof window !== 'undefined') {
+    window.showScannerQRModal = showScannerQRModal;
+    window.closeScannerQRModal = closeScannerQRModal;
+    window.generateScannerQR = generateScannerQR;
+  }
   window.showReportsPage = showReportsPage;
   window.checkForNewReport = checkForNewReport;
   window.finishCounting = finishCounting;

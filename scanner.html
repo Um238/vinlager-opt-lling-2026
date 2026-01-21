@@ -639,7 +639,7 @@
         doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
         
         const reportData = {
-          id: Date.now().toString(),
+          reportId: Date.now().toString(),
           date: new Date().toLocaleString('da-DK'),
           name: 'OPTÆLLING-' + Date.now().toString().slice(-6),
           type: 'lager',
@@ -649,14 +649,38 @@
           archived: false
         };
         
-        const existingReports = JSON.parse(localStorage.getItem('reportsHistory') || '[]');
-        existingReports.unshift(reportData);
-        if (existingReports.length > 100) {
-          existingReports.splice(100);
+        // Gem rapport i backend
+        try {
+          const apiCall = async (endpoint, method = 'GET', body = null) => {
+            const config = window.CONFIG || { API_URL: 'https://vinlager-opt-lling-2026.onrender.com', TIMEOUT: 10000 };
+            const url = config.API_URL + endpoint;
+            const options = {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              signal: AbortSignal.timeout(config.TIMEOUT || 10000)
+            };
+            if (body) options.body = JSON.stringify(body);
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+          };
+          
+          await apiCall('/api/reports/save', 'POST', reportData);
+          console.log('✅ Rapport gemt i backend');
+        } catch (error) {
+          console.error('Fejl ved gemning i backend, gemmer i localStorage:', error);
+          // Fallback til localStorage
+          const existingReports = JSON.parse(localStorage.getItem('reportsHistory') || '[]');
+          existingReports.unshift(reportData);
+          if (existingReports.length > 100) {
+            existingReports.splice(100);
+          }
+          localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
         }
-        localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
+        
+        // Sæt flag for at PC'en kan se der er en ny rapport
         localStorage.setItem('newReportAvailable', 'true');
-        localStorage.setItem('newReportId', reportData.id);
+        localStorage.setItem('newReportId', reportData.reportId);
         
         doc.save('lagerrapport_optælling.pdf');
         
