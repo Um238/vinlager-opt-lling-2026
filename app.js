@@ -76,6 +76,12 @@ function startAutoUpdate() {
       
       // Tjek for ny rapport fra mobil
       checkForNewReport();
+      
+      // Opdater rapporter hvis vi er på rapporter siden
+      const currentPage = document.querySelector('.page.active')?.id;
+      if (currentPage === 'rapporter') {
+        loadReportsHistory();
+      }
     }
   }, 5000); // 5 sekunder
   
@@ -1621,14 +1627,15 @@ async function loadReportsHistory() {
     // Prøv først at hente fra backend
     try {
       const backendReports = await apiCall('/api/reports/history');
-      if (backendReports && Array.isArray(backendReports) && backendReports.length > 0) {
+      if (backendReports && Array.isArray(backendReports)) {
+        // Brug backend data selv hvis tom (så vi får nye rapporter)
         reportsHistory = backendReports.map(r => ({
-          id: r.id,
-          date: r.date,
+          id: r.id || r.reportId,
+          date: r.date || r.created,
           name: r.name,
           type: r.type,
-          wineCount: r.wineCount,
-          totalValue: r.totalValue,
+          wineCount: r.wineCount || 0,
+          totalValue: r.totalValue || 0,
           location: r.location || 'Lokal',
           archived: r.archived === 1 || r.archived === true
         }));
@@ -1645,6 +1652,10 @@ async function loadReportsHistory() {
       if (saved) {
         reportsHistory = JSON.parse(saved);
       }
+      // Prøv at hente fra backend igen efter 3 sekunder
+      setTimeout(() => {
+        loadReportsHistory();
+      }, 3000);
     }
     // Opdater lokation filter før vi renderer tabellen
     updateLocationFilter();
