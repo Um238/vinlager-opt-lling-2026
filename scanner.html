@@ -215,13 +215,22 @@
             <button class="btn-count" onclick="updateCount(5)">+5</button>
           </div>
           <button class="btn-primary btn-save" onclick="saveCount()">💾 Gem antal</button>
+          <button class="btn-secondary" onclick="finishCounting()" style="margin-top: 10px; width: 100%; background: #4CAF50; color: white;">✅ Afslut optælling</button>
         </div>
       </div>
+    </div>
+    
+    <!-- Afslut knap i header -->
+    <div style="position: fixed; bottom: 20px; right: 20px; z-index: 30;">
+      <button onclick="finishCounting()" style="background: #4CAF50; color: white; border: none; padding: 15px 25px; border-radius: 50px; font-size: 1.1em; box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; font-weight: bold;">
+        ✅ Afslut optælling
+      </button>
     </div>
   </div>
 
   <script src="config.js?v=29"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
     // Global state
     let qrStream = null;
@@ -413,6 +422,140 @@
         document.getElementById('wine-antal').textContent = value;
       }
     });
+    
+    // Formatér tal i dansk format
+    function formatDanskPris(amount) {
+      const parts = amount.toFixed(2).split('.');
+      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      const decimalPart = parts[1] || '00';
+      return `${integerPart},${decimalPart}`;
+    }
+    
+    // Afslut optælling og generer rapport
+    async function finishCounting() {
+      if (!confirm('Er du sikker på at du vil afslutte optællingen? En rapport vil blive genereret.')) {
+        return;
+      }
+      
+      try {
+        showStatus('Genererer rapport...', 'success');
+        
+        // Stop scanner
+        if (qrStream) {
+          qrStream.getTracks().forEach(track => track.stop());
+          qrStream = null;
+        }
+        qrScanning = false;
+        
+        // Hent alle vine fra backend
+        const wines = await apiCall('/api/reports/lager');
+        
+        // Generer PDF rapport
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        let y = 20;
+        doc.setFontSize(16);
+        doc.text('Lagerrapport - Optælling Afsluttet', 14, y);
+        y += 10;
+        
+        doc.setFontSize(10);
+        doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+        y += 10;
+        
+        const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+        const colWidths = [30, 60, 25, 25, 15, 15, 30];
+        let x = 14;
+        
+        doc.setFontSize(8);
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+        
+        let totalVærdi = 0;
+        
+        wines.forEach(wine => {
+          if (y > 280) {
+            doc.addPage();
+            y = 20;
+            x = 14;
+            headers.forEach((header, i) => {
+              doc.text(header, x, y);
+              x += colWidths[i];
+            });
+            y += 6;
+          }
+          
+          const pris = wine.indkøbspris || 0;
+          const værdi = pris * (wine.antal || 0);
+          totalVærdi += værdi;
+          
+          x = 14;
+          const row = [
+            wine.vinId || '',
+            wine.navn || '',
+            wine.type || '',
+            wine.land || '',
+            wine.antal || 0,
+            wine.minAntal || 24,
+            pris.toFixed(2)
+          ];
+          
+          row.forEach((cell, i) => {
+            doc.text(String(cell).substring(0, 25), x, y);
+            x += colWidths[i];
+          });
+          y += 6;
+        });
+        
+        // Total
+        y += 5;
+        doc.setFontSize(10);
+        doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+        
+        // Gem rapport data i localStorage så PC kan se den
+        const reportData = {
+          id: Date.now().toString(),
+          date: new Date().toLocaleString('da-DK'),
+          name: 'OPTÆLLING-' + Date.now().toString().slice(-6),
+          type: 'lager',
+          wineCount: wines.length,
+          totalValue: totalVærdi,
+          location: 'Mobil Optælling',
+          archived: false
+        };
+        
+        // Gem i localStorage (PC læser dette)
+        const existingReports = JSON.parse(localStorage.getItem('reportsHistory') || '[]');
+        existingReports.unshift(reportData);
+        if (existingReports.length > 100) {
+          existingReports.splice(100);
+        }
+        localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
+        
+        // Gem også en flag så PC ved der er ny rapport
+        localStorage.setItem('newReportAvailable', 'true');
+        localStorage.setItem('newReportId', reportData.id);
+        
+        // Download PDF
+        doc.save('lagerrapport_optælling.pdf');
+        
+        showStatus('Rapport genereret og gemt!', 'success');
+        
+        // Vis bekræftelse
+        setTimeout(() => {
+          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} vine.\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.\n\nRapporten er nu synlig på PC.`);
+          // Gå tilbage til hovedside
+          window.location.href = 'index.html';
+        }, 1000);
+        
+      } catch (error) {
+        showStatus('Fejl ved generering af rapport: ' + error.message, 'error');
+        console.error('Rapport fejl:', error);
+      }
+    }
   </script>
 </body>
 </html>

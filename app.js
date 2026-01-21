@@ -54,6 +54,43 @@ function formatDanskPris(amount) {
   return `${integerPart},${decimalPart}`;
 }
 
+// Auto-opdatering variabel
+let autoUpdateInterval = null;
+
+// Start auto-opdatering (polling hver 5 sekunder)
+function startAutoUpdate() {
+  // Stop eksisterende interval hvis der er et
+  if (autoUpdateInterval) {
+    clearInterval(autoUpdateInterval);
+  }
+  
+  // Start nyt interval - opdater hver 5 sekunder
+  autoUpdateInterval = setInterval(() => {
+    // Opdater kun hvis brugeren er logget ind og ikke er i scanner mode
+    if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
+      // Opdater dashboard hvis vi er på dashboard siden
+      const currentPage = document.querySelector('.page.active')?.id;
+      if (currentPage === 'dashboard' || currentPage === 'lager') {
+        loadWines();
+      }
+      
+      // Tjek for ny rapport fra mobil
+      checkForNewReport();
+    }
+  }, 5000); // 5 sekunder
+  
+  console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
+}
+
+// Stop auto-opdatering
+function stopAutoUpdate() {
+  if (autoUpdateInterval) {
+    clearInterval(autoUpdateInterval);
+    autoUpdateInterval = null;
+    console.log('⏹ Auto-opdatering stoppet');
+  }
+}
+
 // Initialiser app
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, initialiserer app...');
@@ -81,6 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       if (auth && auth.isLoggedIn()) {
         loadWines();
+        // Start auto-opdatering
+        startAutoUpdate();
+        // Tjek om der er ny rapport fra mobil
+        checkForNewReport();
       }
     }, 100);
     
@@ -90,6 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof setupScanInput === 'function') {
       setupScanInput();
     }
+    
+    // Stop auto-opdatering når siden lukkes
+    window.addEventListener('beforeunload', () => {
+      stopAutoUpdate();
+    });
   }, 50);
 });
 
@@ -1465,6 +1511,39 @@ function printLabels() {
 // Rapporter
 let reportsHistory = [];
 
+// Tjek for ny rapport fra mobil scanner
+function checkForNewReport() {
+  const newReportAvailable = localStorage.getItem('newReportAvailable');
+  if (newReportAvailable === 'true') {
+    // Vis notifikation
+    const notification = document.createElement('div');
+    notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 10000; max-width: 300px;';
+    notification.innerHTML = `
+      <h3 style="margin: 0 0 10px 0;">✅ Ny rapport tilgængelig!</h3>
+      <p style="margin: 0 0 15px 0;">Optælling fra mobil er afsluttet.</p>
+      <button onclick="showReportsPage(); this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: white; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">Se rapport</button>
+      <button onclick="this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: transparent; color: white; border: 1px solid white; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Luk</button>
+    `;
+    document.body.appendChild(notification);
+    
+    // Auto-fjern efter 10 sekunder
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 10000);
+  }
+}
+
+// Vis rapporter side
+function showReportsPage() {
+  showPage('rapporter');
+  // Opdater rapporter
+  if (typeof loadReportsHistory === 'function') {
+    loadReportsHistory();
+  }
+}
+
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
@@ -2671,6 +2750,9 @@ async function finishCounting() {
   window.applyFilter = applyFilter;
   window.clearFilter = clearFilter;
   window.showPage = showPage;
+  window.showReportsPage = showReportsPage;
+  window.checkForNewReport = checkForNewReport;
+  window.finishCounting = finishCounting;
   window.viewReportPDF = viewReportPDF;
   window.downloadReport = downloadReport;
   window.archiveReport = archiveReport;
