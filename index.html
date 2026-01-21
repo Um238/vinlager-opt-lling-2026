@@ -96,6 +96,21 @@
     <section id="dashboard" class="page active">
       <div class="card">
         <h2>Dashboard</h2>
+        
+        <!-- QR-kode til scanner link -->
+        <div class="card" style="background: #f0f9ff; border: 2px solid #4A90E2; margin-bottom: 20px; padding: 20px;">
+          <h3 style="margin-top: 0;">📱 Få scanner-link på din telefon</h3>
+          <p>Scan QR-koden nedenfor med din telefon for at åbne scanneren direkte:</p>
+          <div id="scanner-qr-container" style="text-align: center; margin: 20px 0;">
+            <div id="scanner-qr-code" style="display: inline-block; padding: 20px; background: white; border-radius: 8px;"></div>
+          </div>
+          <p style="font-size: 0.9em; color: #666; margin-bottom: 0;">
+            <strong>Direkte link:</strong><br>
+            <code id="scanner-link-text" style="background: white; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px; word-break: break-all;"></code>
+          </p>
+          <button class="btn-secondary" onclick="copyScannerLink()" style="margin-top: 10px;">📋 Kopiér link</button>
+        </div>
+        
         <div class="stats-grid">
           <div class="stat-card clickable" onclick="showVineOversigt('alle')">
             <div class="stat-label">Antal vine</div>

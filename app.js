@@ -416,6 +416,9 @@ function updateDashboard() {
   });
   const kroner = Math.floor(totalVærdi);
   const øre = Math.round((totalVærdi - kroner) * 100);
+  
+  // Generer QR-kode til scanner link
+  generateScannerQR();
 
   // Opdater dashboard elementer hvis de findes
   const statAntVine = document.getElementById('stat-ant-vine');
@@ -425,6 +428,9 @@ function updateDashboard() {
   if (statAntVine) statAntVine.textContent = antVine;
   if (statLavt) statLavt.textContent = lavtLager;
   if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
+  
+  // Generer QR-kode til scanner link
+  generateScannerQR();
 }
 
 // Vis vine oversigt modal
@@ -587,6 +593,21 @@ function clearFilter() {
 }
 
 function renderLager() {
+  // Tjek om allWines er tom eller undefined
+  if (!allWines || allWines.length === 0) {
+    console.warn('⚠️ allWines er tom - prøver at hente data igen...');
+    const tbody = document.getElementById('lager-tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
+    }
+    // Prøv at hente data igen
+    loadWines().then(() => {
+      // Kald renderLager igen efter data er hentet
+      setTimeout(() => renderLager(), 500);
+    });
+    return;
+  }
+  
   const reolFilter = document.getElementById('filter-reol').value;
   const hyldeFilter = document.getElementById('filter-hylde').value;
 
@@ -2750,6 +2771,8 @@ async function finishCounting() {
   window.applyFilter = applyFilter;
   window.clearFilter = clearFilter;
   window.showPage = showPage;
+  window.generateScannerQR = generateScannerQR;
+  window.copyScannerLink = copyScannerLink;
   window.showReportsPage = showReportsPage;
   window.checkForNewReport = checkForNewReport;
   window.finishCounting = finishCounting;
@@ -2784,4 +2807,81 @@ async function finishCounting() {
   console.log('========================================');
 } else {
   console.error('❌ ERROR: window is undefined!');
+}
+
+// Generer QR-kode til scanner link
+function generateScannerQR() {
+  const qrContainer = document.getElementById('scanner-qr-code');
+  const linkText = document.getElementById('scanner-link-text');
+  
+  if (!qrContainer || !linkText) return;
+  
+  // Få den fulde URL til scanner-siden
+  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+  const scannerUrl = baseUrl + 'scanner.html';
+  
+  // Vis link
+  linkText.textContent = scannerUrl;
+  
+  // Generer QR-kode hvis QRCode biblioteket er tilgængelig
+  if (typeof QRCode !== 'undefined') {
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+      text: scannerUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    // Fallback hvis QRCode ikke er indlæst
+    qrContainer.innerHTML = `
+      <div style="padding: 20px; text-align: center;">
+        <p>QR-kode bibliotek indlæser...</p>
+        <p style="font-size: 0.9em; color: #666;">${scannerUrl}</p>
+      </div>
+    `;
+    // Prøv igen efter lidt tid
+    setTimeout(() => {
+      if (typeof QRCode !== 'undefined') {
+        generateScannerQR();
+      }
+    }, 1000);
+  }
+}
+
+// Kopiér scanner link
+function copyScannerLink() {
+  const linkText = document.getElementById('scanner-link-text');
+  if (!linkText) return;
+  
+  const scannerUrl = linkText.textContent;
+  
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(scannerUrl).then(() => {
+      alert('Link kopieret til udklipsholder!');
+    }).catch(() => {
+      // Fallback
+      copyToClipboardFallback(scannerUrl);
+    });
+  } else {
+    copyToClipboardFallback(scannerUrl);
+  }
+}
+
+function copyToClipboardFallback(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    alert('Link kopieret til udklipsholder!');
+  } catch (err) {
+    alert('Kunne ikke kopiere. Link: ' + text);
+  }
+  document.body.removeChild(textarea);
 }
