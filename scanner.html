@@ -363,13 +363,25 @@
       }
       
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          } 
-        });
+        // Chrome kompatibilitet - prøv flere video constraints
+        let stream = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            } 
+          });
+        } catch (err) {
+          // Fallback for Chrome
+          console.log('Første forsøg fejlede, prøver simplere constraints...');
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment'
+            } 
+          });
+        }
         
         qrStream = stream;
         video.srcObject = stream;

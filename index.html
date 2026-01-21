@@ -47,13 +47,6 @@
     }
     window.promptInstall = promptInstall;
   </script>
-  <!-- QR-kode knap (altid synlig) -->
-  <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-    <button onclick="showScannerQRModal()" style="background: #4A90E2; color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;" title="Vis QR-kode til scanner">
-      📱
-    </button>
-  </div>
-  
   <!-- QR-kode Modal -->
   <div id="scanner-qr-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
     <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; position: relative;">
@@ -110,6 +103,7 @@
       <button class="nav-btn" data-page="labels">Labels</button>
       <button class="nav-btn" data-page="rapporter">Rapporter</button>
       <button class="nav-btn" data-page="admin" id="admin-nav-btn" style="display: none;">Admin</button>
+      <button class="nav-btn" onclick="showScannerQRModal()" style="background: #4A90E2; margin-right: 5px;" title="Vis QR-kode til scanner">📱</button>
       <button class="nav-btn" onclick="handleLogout()" style="background: #dc2626;">Log ud</button>
     </nav>
   </header>
