@@ -1,57 +1,51 @@
-/* Simple service worker for GitHub Pages (PWA install + basic offline cache) */
-const CACHE_NAME = 'vinlager-pwa-v1';
-
-// Keep this list small; cache-busting is handled by ?v= params in html
-const CORE_ASSETS = [
-  './',
-  './index.html',
+// Service Worker for Vinlager Scanner PWA
+const CACHE_NAME = 'vinlager-scanner-v1';
+const urlsToCache = [
   './scanner.html',
-  './styles.css?v=29',
-  './app.js?v=29',
-  './auth.js?v=29',
-  './config.js?v=29',
+  './config.js',
+  './icon-scanner.png',
   './manifest.json',
-  './manifest-app.json',
-  './icon-app.png',
-  './icon-scanner.png'
+  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
 ];
 
+// Install
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).catch(() => {})
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+      .catch(() => {})
   );
   self.skipWaiting();
 });
 
+// Activate
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => (k === CACHE_NAME ? Promise.resolve() : caches.delete(k))))
-    )
-  );
-  self.clients.claim();
-});
-
-// Network-first for API, cache-first for static
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Don't cache API calls to Render
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('onrender.com')) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((resp) => {
-          const copy = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
-          return resp;
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
         })
-        .catch(() => cached);
+      );
     })
   );
+  return self.clients.claim();
 });
 
+// Fetch
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        return response || fetch(event.request);
+      })
+      .catch(() => {
+        if (event.request.destination === 'document') {
+          return caches.match('./scanner.html');
+        }
+      })
+  );
+});
