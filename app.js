@@ -400,18 +400,17 @@ async function loadWines() {
   try {
     const wines = await apiCall('/api/wines');
     
-    // KUN opdater allWines hvis vi faktisk fik data tilbage
-    if (wines && Array.isArray(wines) && wines.length > 0) {
+    // Opdater allWines hvis vi fik data
+    if (wines && Array.isArray(wines)) {
       allWines = wines;
-    } else if (wines && Array.isArray(wines)) {
-      // Tom array er OK - bare ikke nulstil allWines hvis vi allerede har data
+    } else {
+      // Hvis API fejler, behold eksisterende data
+      console.warn('⚠️ API returnerede ikke gyldig data. Beholder eksisterende lager.');
       if (allWines.length === 0) {
-        allWines = wines;
-      } else {
-        console.warn('⚠️ API returnerede tom array, men vi har allerede data. Beholder eksisterende data.');
+        showError('Kunne ikke hente vine. Tjek at backend kører.');
+        return;
       }
     }
-    // Hvis wines er undefined/null, beholder vi allWines som den er
     
     // Opdater minimum til 24 for alle vine der ikke har det sat
     const needsUpdate = allWines.filter(w => !w.minAntal || w.minAntal === 0);
@@ -428,15 +427,14 @@ async function loadWines() {
           console.error(`Fejl ved opdatering af ${wine.vinId}:`, err);
         }
       }
-      // Genhent efter opdatering - men kun hvis vi har data
+      // Genhent efter opdatering
       try {
         const updatedWines = await apiCall('/api/wines');
-        if (updatedWines && Array.isArray(updatedWines) && updatedWines.length > 0) {
+        if (updatedWines && Array.isArray(updatedWines)) {
           allWines = updatedWines;
         }
       } catch (err) {
         console.error('Fejl ved genhentning efter opdatering:', err);
-        // Behold allWines som den er
       }
     }
     
@@ -454,7 +452,6 @@ async function loadWines() {
       showError('Kunne ikke hente vine. Tjek at backend kører.');
     } else {
       console.warn('⚠️ API fejl, men beholder eksisterende lager data.');
-      showError('Kunne ikke opdatere vine. Viser eksisterende data.');
     }
   }
 }

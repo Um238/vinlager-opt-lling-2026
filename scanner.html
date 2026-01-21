@@ -630,8 +630,12 @@
     
     // Luk vin panel
     function closeWinePanel() {
-      document.getElementById('wine-panel').classList.remove('show');
-      currentWine = null;
+      const panel = document.getElementById('wine-panel');
+      if (panel) {
+        panel.classList.remove('show');
+      }
+      // Nulstil IKKE currentWine - vi skal kunne lave rapport senere
+      // currentWine = null;
     }
     
     // Luk scanner
