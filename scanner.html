@@ -2,7 +2,7 @@
 <html lang="da">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover, minimum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -27,7 +27,7 @@
       position: fixed;
       width: 100%;
       height: 100%;
-      -webkit-tap-highlight-color: transparent;
+      font-size: 18px;
     }
     
     .scanner-container {
@@ -43,25 +43,18 @@
     
     .scanner-header {
       position: relative;
-      background: #4A90E2;
+      background: #4CAF50;
       color: white;
       padding: 16px 70px 16px 16px;
       text-align: center;
       z-index: 10;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
       flex-shrink: 0;
     }
     
     .scanner-header h1 {
       margin: 0;
-      font-size: 1.4em;
+      font-size: 1.5em;
       font-weight: 600;
-    }
-    
-    @media (max-width: 768px) {
-      .scanner-header h1 {
-        font-size: 1.6em;
-      }
     }
     
     .scanner-close-btn {
@@ -69,15 +62,14 @@
       top: 10px;
       right: 10px;
       background: rgba(255,255,255,0.9);
-      color: #4A90E2;
-      border: 2px solid rgba(255,255,255,1);
+      color: #4CAF50;
+      border: none;
       padding: 10px 16px;
       border-radius: 20px;
-      cursor: pointer;
       font-weight: 700;
       font-size: 1em;
       min-width: 60px;
-      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
       touch-action: manipulation;
     }
 
@@ -101,193 +93,158 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: min(60vw, 240px);
-      height: min(60vw, 240px);
-      border: 4px solid #4A90E2;
-      border-radius: 16px;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+      width: min(50vw, 200px);
+      height: min(50vw, 200px);
+      border: 3px solid #4CAF50;
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
       pointer-events: none;
     }
     
-    .wine-panel {
+    .bottom-controls {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
-      background: white;
-      max-height: 75vh;
-      overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
-      box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+      background: rgba(0,0,0,0.8);
+      padding: 15px;
       z-index: 20;
-      border-radius: 20px 20px 0 0;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    .wine-panel.show {
-      transform: translateY(0);
-    }
-    
-    .wine-panel-content {
-      padding: 24px;
-      padding-bottom: calc(24px + env(safe-area-inset-bottom));
-      padding-top: 50px; /* Plads til luk-knap */
-    }
-    
-    @media (max-width: 768px) {
-      .wine-panel-content {
-        padding: 20px;
-        padding-bottom: calc(20px + env(safe-area-inset-bottom));
-        padding-top: 50px;
-      }
-    }
-    
-    .wine-image {
-      width: 100%;
-      max-width: 200px;
-      height: auto;
-      border-radius: 8px;
-      margin: 10px auto;
-      display: block;
-    }
-    
-    .count-controls {
-      margin-top: 15px;
-    }
-    
-    .count-buttons {
       display: flex;
-      gap: 12px;
-      justify-content: center;
-      margin: 20px 0;
-      flex-wrap: wrap;
+      gap: 10px;
     }
     
-    .btn-count {
-      width: 70px;
-      height: 70px;
-      font-size: 1.8em;
-      border-radius: 50%;
-      border: 3px solid #4A90E2;
-      background: white;
-      color: #4A90E2;
-      font-weight: bold;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      transition: all 0.2s;
-    }
-    
-    .btn-count:active {
-      transform: scale(0.95);
-      background: #4A90E2;
-      color: white;
-    }
-    
-    @media (max-width: 768px) {
-      .btn-count {
-        width: 80px;
-        height: 80px;
-        font-size: 2em;
-      }
-    }
-
     .finish-btn {
-      width: 100%;
-      padding: 18px;
-      font-size: 1.2em;
-      margin-top: 15px;
-      background: #4CAF50 !important;
-      color: white !important;
-      border: none;
-      border-radius: 12px;
-      font-weight: 800;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      transition: all 0.2s;
-    }
-    
-    .finish-btn:active {
-      transform: scale(0.98);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    @media (max-width: 768px) {
-      .finish-btn {
-        padding: 20px;
-        font-size: 1.3em;
-      }
-    }
-    
-    .btn-save {
-      width: 100%;
+      flex: 1;
       padding: 18px;
       font-size: 1.3em;
-      margin-top: 15px;
-      background: #4A90E2;
+      background: #4CAF50;
       color: white;
       border: none;
       border-radius: 12px;
-      cursor: pointer;
       font-weight: 700;
-      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
       touch-action: manipulation;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      transition: all 0.2s;
     }
     
-    .btn-save:active {
-      transform: scale(0.98);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    /* Popup Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
     }
     
-    .btn-save:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
+    .modal-overlay.show {
+      display: flex;
     }
     
-    @media (max-width: 768px) {
-      .btn-save {
-        padding: 20px;
-        font-size: 1.4em;
-      }
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
     }
     
-    .btn-close-panel {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      background: #f44336;
+    .modal-title {
+      font-size: 1.5em;
+      font-weight: 700;
+      margin-bottom: 15px;
+    }
+    
+    .modal-warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .modal-warning-icon {
+      font-size: 1.5em;
+    }
+    
+    .modal-warning-text {
+      color: #856404;
+      font-weight: 600;
+    }
+    
+    .modal-info {
+      margin-bottom: 15px;
+      font-size: 1.1em;
+    }
+    
+    .modal-input-group {
+      margin-bottom: 20px;
+    }
+    
+    .modal-input-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 1.1em;
+    }
+    
+    .modal-input-group input {
+      width: 100%;
+      padding: 16px;
+      font-size: 1.5em;
+      text-align: center;
+      border: 3px solid #4CAF50;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn-cancel {
+      flex: 1;
+      padding: 16px;
+      font-size: 1.2em;
+      background: #6c757d;
       color: white;
       border: none;
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      font-size: 1.8em;
+      border-radius: 12px;
+      font-weight: 600;
       cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
-      z-index: 21;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     
-    @media (max-width: 768px) {
-      .btn-close-panel {
-        width: 52px;
-        height: 52px;
-        font-size: 2em;
-      }
+    .btn-save-modal {
+      flex: 1;
+      padding: 16px;
+      font-size: 1.2em;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
     }
     
     .status-message {
       text-align: center;
-      padding: 8px;
-      margin: 8px 0;
-      border-radius: 5px;
-      font-size: 0.9em;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      font-size: 1em;
+      font-weight: 600;
     }
     
     .status-success {
@@ -298,63 +255,6 @@
     .status-error {
       background: #f44336;
       color: white;
-    }
-    
-    #count-input {
-      width: 100%;
-      padding: 18px;
-      font-size: 1.8em;
-      text-align: center;
-      border: 3px solid #4A90E2;
-      border-radius: 12px;
-      margin: 15px 0;
-      font-weight: 600;
-      -webkit-appearance: none;
-      -moz-appearance: textfield;
-    }
-    
-    #count-input::-webkit-inner-spin-button,
-    #count-input::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    
-    @media (max-width: 768px) {
-      #count-input {
-        padding: 20px;
-        font-size: 2em;
-      }
-    }
-    
-    .wine-info {
-      font-size: 1.1em;
-      line-height: 1.8;
-      margin: 15px 0;
-    }
-    
-    @media (max-width: 768px) {
-      .wine-info {
-        font-size: 1.2em;
-      }
-    }
-    
-    .wine-info strong {
-      display: inline-block;
-      min-width: 120px;
-      font-weight: 600;
-    }
-    
-    #wine-navn {
-      margin: 10px 0;
-      font-size: 1.5em;
-      font-weight: 700;
-      color: #333;
-    }
-    
-    @media (max-width: 768px) {
-      #wine-navn {
-        font-size: 1.8em;
-      }
     }
   </style>
 </head>
@@ -372,33 +272,32 @@
       <div class="scan-overlay"></div>
     </div>
     
-    <div class="wine-panel" id="wine-panel">
-      <button class="btn-close-panel" onclick="closeWinePanel()">×</button>
-      <div class="wine-panel-content">
-        <h2 id="wine-navn"></h2>
-        <div id="wine-image-container"></div>
-        <div class="wine-info">
-          <div><strong>VIN-ID:</strong> <span id="wine-vinId"></span></div>
-          <div><strong>Nuværende:</strong> <span id="wine-antal" style="font-size: 1.5em; font-weight: bold; color: #4A90E2;"></span></div>
-          <div><strong>Reol:</strong> <span id="wine-reol"></span> | <strong>Hylde:</strong> <span id="wine-hylde"></span></div>
-        </div>
-        
-        <div class="count-controls">
-          <input type="number" id="count-input" placeholder="Indtast antal">
-          <div class="count-buttons">
-            <button class="btn-count" onclick="updateCount(-5)">-5</button>
-            <button class="btn-count" onclick="updateCount(-1)">-1</button>
-            <button class="btn-count" onclick="updateCount(1)">+1</button>
-            <button class="btn-count" onclick="updateCount(5)">+5</button>
-          </div>
-          <button class="btn-save" onclick="saveCount()">💾 Gem antal</button>
-          <button class="finish-btn" onclick="finishCounting()">✅ Afslut optælling</button>
-        </div>
+    <div class="bottom-controls">
+      <button class="finish-btn" onclick="finishCounting()">✅ Afslut optælling</button>
+    </div>
+  </div>
+
+  <!-- Popup Modal -->
+  <div class="modal-overlay" id="quantity-modal">
+    <div class="modal-content">
+      <h2 class="modal-title" id="modal-title">Indtast antal</h2>
+      <div id="modal-warning" class="modal-warning" style="display: none;">
+        <span class="modal-warning-icon">⚠️</span>
+        <span class="modal-warning-text" id="modal-warning-text">Vare ikke fundet</span>
+      </div>
+      <div class="modal-info" id="modal-info"></div>
+      <div class="modal-input-group">
+        <label for="quantity-input">Antal:</label>
+        <input type="number" id="quantity-input" min="0" value="1" autofocus>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeModal()">Annuller</button>
+        <button class="btn-save-modal" onclick="saveQuantity()">Gem</button>
       </div>
     </div>
   </div>
 
-  <script src="config.js?v=30"></script>
+  <script src="config.js?v=32"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
@@ -413,7 +312,7 @@
     let qrStream = null;
     let qrScanning = false;
     let currentWine = null;
-    let currentCount = 0;
+    let scannedWines = new Map(); // Gem scannede vine
     let scanAnimationFrame = null;
     
     // Helper funktion til at få CONFIG
@@ -422,6 +321,7 @@
         return window.CONFIG;
       }
       if (typeof CONFIG !== 'undefined') {
+        window.CONFIG = CONFIG;
         return CONFIG;
       }
       return {
@@ -459,12 +359,10 @@
       const canvas = document.getElementById('qr-canvas');
       
       if (qrScanning) {
-        console.log('Scanner kører allerede');
         return;
       }
       
       try {
-        console.log('Starter kamera...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             facingMode: 'environment',
@@ -517,184 +415,123 @@
         
         scanFrame();
         showStatus('Scanner klar', 'success');
-        console.log('Scanner startet');
       } catch (error) {
         console.error('Kamera fejl:', error);
         qrScanning = false;
         if (error.name === 'NotAllowedError') {
-          showStatus('Kamera tilladelse nægtet. Tjek indstillinger.', 'error');
+          showStatus('Kamera tilladelse nægtet', 'error');
         } else if (error.name === 'NotFoundError') {
           showStatus('Ingen kamera fundet', 'error');
         } else {
-          showStatus('Kunne ikke tilgå kamera: ' + error.message, 'error');
+          showStatus('Kunne ikke tilgå kamera', 'error');
         }
       }
     }
     
     // Håndter scan
     async function handleScan(codeData) {
-      // Hvis panel allerede er åbent, ignorer nye scans (undgå spam)
-      const panel = document.getElementById('wine-panel');
-      if (panel && panel.classList.contains('show')) {
+      // Ignorer hvis modal allerede er åben
+      const modal = document.getElementById('quantity-modal');
+      if (modal && modal.classList.contains('show')) {
         return;
       }
       
       try {
-        console.log('Scanner kode:', codeData);
         currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData)}`);
-        showWineDetails(currentWine);
-        showStatus('✅ Vin fundet!', 'success');
+        showQuantityModal(currentWine, false);
       } catch (error) {
-        console.error('Scan fejl:', error);
-        showStatus('❌ Vin ikke fundet: ' + codeData, 'error');
+        // Vin ikke fundet - vis modal alligevel
+        showQuantityModal({ vinId: codeData, navn: 'Ukendt vare' }, true);
       }
     }
     
-    // Vis vin detaljer
-    function showWineDetails(wine) {
-      document.getElementById('wine-navn').textContent = wine.navn || 'Ukendt vin';
-      document.getElementById('wine-vinId').textContent = wine.vinId || '';
-      document.getElementById('wine-antal').textContent = wine.antal || 0;
-      document.getElementById('wine-reol').textContent = wine.reol || '';
-      document.getElementById('wine-hylde').textContent = wine.hylde || '';
+    // Vis quantity modal
+    function showQuantityModal(wine, notFound) {
+      const modal = document.getElementById('quantity-modal');
+      const title = document.getElementById('modal-title');
+      const warning = document.getElementById('modal-warning');
+      const warningText = document.getElementById('modal-warning-text');
+      const info = document.getElementById('modal-info');
+      const input = document.getElementById('quantity-input');
       
-      currentCount = wine.antal || 0;
-      document.getElementById('count-input').value = '';
+      currentWine = wine;
       
-      const imgContainer = document.getElementById('wine-image-container');
-      if (wine.billede) {
-        imgContainer.innerHTML = `<img src="${getConfig().API_URL}/uploads/images/${wine.billede}" alt="${wine.navn}" class="wine-image">`;
+      if (notFound) {
+        title.textContent = 'Indtast antal';
+        warning.style.display = 'flex';
+        warningText.textContent = 'Vare ikke fundet';
+        info.innerHTML = `
+          <div><strong>Stregkode:</strong> ${wine.vinId}</div>
+          <div style="margin-top: 8px; color: #666;">Varen findes ikke i varelageret</div>
+        `;
+        input.value = '1';
       } else {
-        imgContainer.innerHTML = '';
+        title.textContent = wine.navn || 'Indtast antal';
+        warning.style.display = 'none';
+        info.innerHTML = `
+          <div><strong>VIN-ID:</strong> ${wine.vinId}</div>
+          <div><strong>Nuværende:</strong> ${wine.antal || 0}</div>
+          ${wine.reol ? `<div><strong>Reol:</strong> ${wine.reol} | <strong>Hylde:</strong> ${wine.hylde || ''}</div>` : ''}
+        `;
+        input.value = wine.antal || '1';
       }
       
-      document.getElementById('wine-panel').classList.add('show');
+      modal.classList.add('show');
+      input.focus();
+      input.select();
     }
     
-    // Opdater antal
-    function updateCount(change) {
-      const directInput = document.getElementById('count-input').value;
-      if (directInput) {
-        currentCount = parseInt(directInput) || 0;
-      } else {
-        currentCount = (currentCount || 0) + change;
-        if (currentCount < 0) currentCount = 0;
-      }
-      document.getElementById('count-input').value = currentCount;
-      document.getElementById('wine-antal').textContent = currentCount;
+    // Luk modal
+    function closeModal() {
+      const modal = document.getElementById('quantity-modal');
+      modal.classList.remove('show');
+      currentWine = null;
     }
     
     // Gem antal
-    async function saveCount() {
-      if (!currentWine) return;
+    async function saveQuantity() {
+      const input = document.getElementById('quantity-input');
+      const quantity = parseInt(input.value) || 0;
       
-      const saveBtn = document.querySelector('.btn-save');
-      const finishBtn = document.querySelector('.finish-btn');
-      
-      if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.textContent = '💾 Gemmer...';
+      if (!currentWine) {
+        closeModal();
+        return;
       }
-      
-      const newCount = parseInt(document.getElementById('count-input').value) || currentCount;
       
       try {
-        await apiCall(`/api/count/${currentWine.vinId}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            nytAntal: newCount
-          })
-        });
-        
-        showStatus('✅ Antal gemt!', 'success');
-        currentWine.antal = newCount;
-        document.getElementById('wine-antal').textContent = newCount;
-        
-        // Re-enable button
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = '💾 Gem antal';
+        // Gem i backend hvis vin findes
+        if (currentWine.vinId && !currentWine.navn.includes('Ukendt')) {
+          await apiCall(`/api/count/${currentWine.vinId}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              nytAntal: quantity
+            })
+          });
         }
         
-        // LUK IKKE PANELET - lad brugeren kunne trykke "Afslut optælling"
-        // Panel lukkes kun hvis brugeren trykker på X eller scanner en ny vin
+        // Gem i scannedWines map
+        scannedWines.set(currentWine.vinId, {
+          ...currentWine,
+          antal: quantity
+        });
+        
+        showStatus(`✅ ${currentWine.navn || currentWine.vinId}: ${quantity}`, 'success');
+        closeModal();
       } catch (error) {
         showStatus('❌ Fejl ved gemning: ' + error.message, 'error');
-        // Re-enable button ved fejl
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = '💾 Gem antal';
-        }
       }
-    }
-    
-    // Luk vin panel
-    function closeWinePanel() {
-      const panel = document.getElementById('wine-panel');
-      if (panel) {
-        panel.classList.remove('show');
-      }
-      // Nulstil IKKE currentWine - vi skal kunne lave rapport senere
-      // currentWine = null;
-    }
-    
-    // Luk scanner
-    function closeScanner() {
-      if (confirm('Er du sikker på at du vil lukke scanneren?')) {
-        if (scanAnimationFrame) {
-          cancelAnimationFrame(scanAnimationFrame);
-          scanAnimationFrame = null;
-        }
-        if (qrStream) {
-          qrStream.getTracks().forEach(track => track.stop());
-          qrStream = null;
-        }
-        qrScanning = false;
-        window.location.href = 'index.html';
-      }
-    }
-    
-    // Vis status
-    function showStatus(message, type) {
-      const statusEl = document.getElementById('status-message');
-      statusEl.textContent = message;
-      statusEl.className = `status-message status-${type}`;
-      statusEl.style.display = 'block';
-      
-      setTimeout(() => {
-        statusEl.style.display = 'none';
-      }, 3000);
-    }
-    
-    // Input listener
-    document.addEventListener('DOMContentLoaded', () => {
-      const countInput = document.getElementById('count-input');
-      if (countInput) {
-        countInput.addEventListener('input', (e) => {
-          const value = parseInt(e.target.value);
-          if (!isNaN(value)) {
-            currentCount = value;
-            document.getElementById('wine-antal').textContent = value;
-          }
-        });
-      }
-      
-      // Start scanner
-      startQRScanner();
-    });
-    
-    // Formatér tal
-    function formatDanskPris(amount) {
-      const parts = amount.toFixed(2).split('.');
-      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      const decimalPart = parts[1] || '00';
-      return `${integerPart},${decimalPart}`;
     }
     
     // Afslut optælling
     async function finishCounting() {
-      if (!confirm('Er du sikker på at du vil afslutte optællingen? En rapport vil blive genereret.')) {
-        return;
+      if (scannedWines.size === 0) {
+        if (!confirm('Ingen vine scannet. Er du sikker på at du vil afslutte?')) {
+          return;
+        }
+      } else {
+        if (!confirm(`Er du sikker på at du vil afslutte optællingen?\n\n${scannedWines.size} vine scannet.\nEn rapport vil blive genereret.`)) {
+          return;
+        }
       }
       
       try {
@@ -792,52 +629,22 @@
             signal: AbortSignal.timeout(config.TIMEOUT || 15000)
           });
           
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Rapport gemt i backend:', result);
+            localStorage.setItem('newReportAvailable', 'true');
+            localStorage.setItem('newReportId', reportData.reportId);
           }
-          
-          const result = await response.json();
-          console.log('✅ Rapport gemt i backend:', result);
-          
-          // Sæt flag for at PC'en kan se der er en ny rapport
-          localStorage.setItem('newReportAvailable', 'true');
-          localStorage.setItem('newReportId', reportData.reportId);
-          
         } catch (error) {
           console.error('Fejl ved gemning i backend:', error);
-          console.warn('Gemmer i localStorage som backup...');
-          
-          // Fallback til localStorage
-          const existingReports = JSON.parse(localStorage.getItem('reportsHistory') || '[]');
-          const reportForLocalStorage = {
-            id: reportData.reportId,
-            date: reportData.date,
-            name: reportData.name,
-            type: reportData.type,
-            wineCount: reportData.wineCount,
-            totalValue: reportData.totalValue,
-            location: reportData.location,
-            archived: false
-          };
-          existingReports.unshift(reportForLocalStorage);
-          if (existingReports.length > 100) {
-            existingReports.splice(100);
-          }
-          localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
-          
-          // Sæt flag alligevel
-          localStorage.setItem('newReportAvailable', 'true');
-          localStorage.setItem('newReportId', reportData.reportId);
-          
-          showStatus('⚠️ Rapport gemt lokalt (backend fejl)', 'error');
         }
         
         doc.save('lagerrapport_optælling.pdf');
         
-        showStatus('Rapport genereret og gemt!', 'success');
+        showStatus('✅ Rapport genereret!', 'success');
         
         setTimeout(() => {
-          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} vine.\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.\n\nRapporten er nu synlig på PC.`);
+          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} vine.\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.`);
           window.location.href = 'index.html';
         }, 1000);
         
@@ -846,6 +653,54 @@
         console.error('Rapport fejl:', error);
       }
     }
+    
+    // Luk scanner
+    function closeScanner() {
+      if (confirm('Er du sikker på at du vil lukke scanneren?')) {
+        if (scanAnimationFrame) {
+          cancelAnimationFrame(scanAnimationFrame);
+          scanAnimationFrame = null;
+        }
+        if (qrStream) {
+          qrStream.getTracks().forEach(track => track.stop());
+          qrStream = null;
+        }
+        qrScanning = false;
+        window.location.href = 'index.html';
+      }
+    }
+    
+    // Vis status
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('status-message');
+      statusEl.textContent = message;
+      statusEl.className = `status-message status-${type}`;
+      statusEl.style.display = 'block';
+      
+      setTimeout(() => {
+        statusEl.style.display = 'none';
+      }, 3000);
+    }
+    
+    // Formatér tal
+    function formatDanskPris(amount) {
+      const parts = amount.toFixed(2).split('.');
+      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      const decimalPart = parts[1] || '00';
+      return `${integerPart},${decimalPart}`;
+    }
+    
+    // Start scanner når siden loader
+    document.addEventListener('DOMContentLoaded', () => {
+      startQRScanner();
+      
+      // Enter key i modal
+      document.getElementById('quantity-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          saveQuantity();
+        }
+      });
+    });
   </script>
 </body>
 </html>
