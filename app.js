@@ -398,7 +398,20 @@ async function apiCall(endpoint, options = {}) {
 // Load wines
 async function loadWines() {
   try {
-    allWines = await apiCall('/api/wines');
+    const wines = await apiCall('/api/wines');
+    
+    // KUN opdater allWines hvis vi faktisk fik data tilbage
+    if (wines && Array.isArray(wines) && wines.length > 0) {
+      allWines = wines;
+    } else if (wines && Array.isArray(wines)) {
+      // Tom array er OK - bare ikke nulstil allWines hvis vi allerede har data
+      if (allWines.length === 0) {
+        allWines = wines;
+      } else {
+        console.warn('⚠️ API returnerede tom array, men vi har allerede data. Beholder eksisterende data.');
+      }
+    }
+    // Hvis wines er undefined/null, beholder vi allWines som den er
     
     // Opdater minimum til 24 for alle vine der ikke har det sat
     const needsUpdate = allWines.filter(w => !w.minAntal || w.minAntal === 0);
@@ -415,8 +428,16 @@ async function loadWines() {
           console.error(`Fejl ved opdatering af ${wine.vinId}:`, err);
         }
       }
-      // Genhent efter opdatering
-      allWines = await apiCall('/api/wines');
+      // Genhent efter opdatering - men kun hvis vi har data
+      try {
+        const updatedWines = await apiCall('/api/wines');
+        if (updatedWines && Array.isArray(updatedWines) && updatedWines.length > 0) {
+          allWines = updatedWines;
+        }
+      } catch (err) {
+        console.error('Fejl ved genhentning efter opdatering:', err);
+        // Behold allWines som den er
+      }
     }
     
     updateDashboard();
@@ -428,7 +449,13 @@ async function loadWines() {
     }
   } catch (error) {
     console.error('Fejl ved indlæsning af vine:', error);
-    showError('Kunne ikke hente vine. Tjek at backend kører.');
+    // VIGTIGT: Nulstil IKKE allWines ved fejl - behold eksisterende data
+    if (allWines.length === 0) {
+      showError('Kunne ikke hente vine. Tjek at backend kører.');
+    } else {
+      console.warn('⚠️ API fejl, men beholder eksisterende lager data.');
+      showError('Kunne ikke opdatere vine. Viser eksisterende data.');
+    }
   }
 }
 

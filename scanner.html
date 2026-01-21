@@ -533,7 +533,9 @@
     
     // Håndter scan
     async function handleScan(codeData) {
-      if (document.getElementById('wine-panel').classList.contains('show')) {
+      // Hvis panel allerede er åbent, ignorer nye scans (undgå spam)
+      const panel = document.getElementById('wine-panel');
+      if (panel && panel.classList.contains('show')) {
         return;
       }
       
@@ -541,10 +543,10 @@
         console.log('Scanner kode:', codeData);
         currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData)}`);
         showWineDetails(currentWine);
-        showStatus('Vin fundet!', 'success');
+        showStatus('✅ Vin fundet!', 'success');
       } catch (error) {
         console.error('Scan fejl:', error);
-        showStatus('Vin ikke fundet: ' + codeData, 'error');
+        showStatus('❌ Vin ikke fundet: ' + codeData, 'error');
       }
     }
     
@@ -587,6 +589,8 @@
       if (!currentWine) return;
       
       const saveBtn = document.querySelector('.btn-save');
+      const finishBtn = document.querySelector('.finish-btn');
+      
       if (saveBtn) {
         saveBtn.disabled = true;
         saveBtn.textContent = '💾 Gemmer...';
@@ -612,10 +616,8 @@
           saveBtn.textContent = '💾 Gem antal';
         }
         
-        // Luk panel efter 1 sekund, men lad knapperne være synlige
-        setTimeout(() => {
-          closeWinePanel();
-        }, 1500);
+        // LUK IKKE PANELET - lad brugeren kunne trykke "Afslut optælling"
+        // Panel lukkes kun hvis brugeren trykker på X eller scanner en ny vin
       } catch (error) {
         showStatus('❌ Fejl ved gemning: ' + error.message, 'error');
         // Re-enable button ved fejl
