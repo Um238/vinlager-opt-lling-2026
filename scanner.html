@@ -6,7 +6,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#4A90E2">
+  <meta name="apple-mobile-web-app-title" content="Scanner">
+  <link rel="apple-touch-icon" href="icon-scanner-192.png">
+  <meta name="theme-color" content="#4CAF50">
   <title>Vinlager Scanner</title>
   <link rel="stylesheet" href="styles.css?v=29">
   <link rel="manifest" href="manifest.json">
@@ -186,6 +188,7 @@
   <div class="scanner-container">
     <div class="scanner-header">
       <h1>🍷 Vinlager Scanner</h1>
+      <button onclick="closeScanner()" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.2); color: white; border: 2px solid white; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.9em;">✕ Luk Scanner</button>
       <div id="status-message" class="status-message" style="display: none;"></div>
     </div>
     
@@ -400,6 +403,23 @@
       document.getElementById('wine-panel').classList.remove('show');
       currentWine = null;
       // Scanner fortsætter automatisk
+    }
+    
+    // Luk scanner og stop kamera
+    function closeScanner() {
+      if (confirm('Er du sikker på at du vil lukke scanneren?')) {
+        // Stop kamera stream
+        if (qrStream) {
+          qrStream.getTracks().forEach(track => {
+            track.stop();
+          });
+          qrStream = null;
+        }
+        qrScanning = false;
+        
+        // Gå tilbage til hovedside
+        window.location.href = 'index.html';
+      }
     }
     
     // Vis status besked
