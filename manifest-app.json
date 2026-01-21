@@ -2,7 +2,8 @@
   "name": "CellarCount 2026 - Vinlager",
   "short_name": "Vinlager",
   "description": "Vinlager optælling og administration",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#4A90E2",
   "theme_color": "#4A90E2",
@@ -11,6 +12,12 @@
     {
       "src": "icon-app.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-app.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     }
