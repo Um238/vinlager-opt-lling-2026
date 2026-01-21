@@ -429,8 +429,7 @@ function updateDashboard() {
   if (statLavt) statLavt.textContent = lavtLager;
   if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
   
-  // Generer QR-kode til scanner link
-  generateScannerQR();
+  // QR-kode genereres når modal åbnes
 }
 
 // Vis vine oversigt modal
@@ -2772,6 +2771,8 @@ async function finishCounting() {
   window.clearFilter = clearFilter;
   window.showPage = showPage;
   window.generateScannerQR = generateScannerQR;
+  window.showScannerQRModal = showScannerQRModal;
+  window.closeScannerQRModal = closeScannerQRModal;
   window.copyScannerLink = copyScannerLink;
   window.showReportsPage = showReportsPage;
   window.checkForNewReport = checkForNewReport;
@@ -2807,6 +2808,23 @@ async function finishCounting() {
   console.log('========================================');
 } else {
   console.error('❌ ERROR: window is undefined!');
+}
+
+// Vis QR-kode modal
+function showScannerQRModal() {
+  const modal = document.getElementById('scanner-qr-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    generateScannerQR();
+  }
+}
+
+// Luk QR-kode modal
+function closeScannerQRModal() {
+  const modal = document.getElementById('scanner-qr-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
 }
 
 // Generer QR-kode til scanner link
