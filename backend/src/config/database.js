@@ -71,6 +71,36 @@ function initializeDatabase() {
       )
     `);
 
+    // Lokationer (Vinlager, Vinkøler, Bar 1, Restaurant 1, etc.)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        category TEXT DEFAULT 'Vin',
+        description TEXT,
+        oprettet TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Inventory (lagerbeholdning per lokation)
+    // En vin kan stå flere steder - hver kombination af vin + lokation = én række
+    db.run(`
+      CREATE TABLE IF NOT EXISTS inventory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        wine_id INTEGER NOT NULL,
+        location_id INTEGER NOT NULL,
+        reol TEXT,
+        hylde TEXT,
+        antal INTEGER DEFAULT 0,
+        minAntal INTEGER DEFAULT 24,
+        oprettet TEXT DEFAULT CURRENT_TIMESTAMP,
+        opdateret TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (wine_id) REFERENCES wines(id) ON DELETE CASCADE,
+        FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+        UNIQUE(wine_id, location_id, reol, hylde)
+      )
+    `);
+
     // Rapporter historik
     db.run(`
       CREATE TABLE IF NOT EXISTS reports (
@@ -90,6 +120,11 @@ function initializeDatabase() {
     db.run('CREATE INDEX IF NOT EXISTS idx_wines_vinId ON wines(vinId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_wines_reol_hylde ON wines(reol, hylde)');
     db.run('CREATE INDEX IF NOT EXISTS idx_counts_vinId ON counts(vinId)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(name)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_locations_category ON locations(category)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_inventory_wine_id ON inventory(wine_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_inventory_location_id ON inventory(location_id)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_inventory_wine_location ON inventory(wine_id, location_id)');
     db.run('CREATE INDEX IF NOT EXISTS idx_reports_reportId ON reports(reportId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created)');
 
