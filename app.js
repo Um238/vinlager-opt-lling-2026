@@ -2055,19 +2055,109 @@ function renderReportsTable() {
 }
 
 // Vis rapport PDF i browser (ikke download)
-function viewReportPDF(reportId) {
+async function viewReportPDF(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
   if (!report) {
     alert('Rapport ikke fundet');
     return;
   }
   
-  // ALTID vis PDF baseret på gemt rapport data - generer IKKE ny rapport
-  // Dette sikrer at vi viser den faktiske rapport der blev gemt, ikke nuværende lager
-  generateReportPDFFromData(report);
+  // For rapporter fra mobil scanner, hent vine-data og generer fuld PDF
+  // For lokale rapporter, vis baseret på gemt data
+  if (report.location && report.location.includes('Mobil')) {
+    // Hent vine-data og generer fuld PDF ligesom mobil scanneren gjorde
+    await generateFullReportPDF(report);
+  } else {
+    // For lokale rapporter, vis baseret på gemt data
+    generateReportPDFFromData(report);
+  }
 }
 
-// Generer PDF fra gemt rapport data (ikke fra nuværende lager)
+// Generer fuld PDF rapport med vine-data (for mobil rapporter)
+async function generateFullReportPDF(report) {
+  try {
+    // Hent vine-data fra backend (samme som mobil scanneren gjorde)
+    const wines = await apiCall('/api/reports/lager');
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text(report.name || 'Lagerrapport - Optælling Afsluttet', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
+    y += 7;
+    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
+    y += 10;
+    
+    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 25, 25, 15, 15, 30];
+    let x = 14;
+    
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+    
+    let totalVærdi = 0;
+    
+    wines.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+      
+      const pris = wine.indkøbspris || 0;
+      const værdi = pris * (wine.antal || 0);
+      totalVærdi += værdi;
+      
+      x = 14;
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.type || '',
+        wine.land || '',
+        wine.antal || 0,
+        wine.minAntal || 24,
+        pris.toFixed(2)
+      ];
+      
+      row.forEach((cell, i) => {
+        doc.text(String(cell).substring(0, 25), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+    
+    y += 5;
+    doc.setFontSize(10);
+    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    y += 7;
+    doc.setFontSize(8);
+    doc.text('Rapport ID: ' + report.id, 14, y);
+    
+    // Vis PDF i browser
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    window.open(pdfUrl, '_blank');
+  } catch (error) {
+    console.error('Fejl ved generering af fuld PDF:', error);
+    alert('Kunne ikke vise rapport. Fejl: ' + error.message);
+  }
+}
+
+// Generer PDF fra gemt rapport data (ikke fra nuværende lager) - for lokale rapporter
 function generateReportPDFFromData(report) {
   try {
     const { jsPDF } = window.jspdf;
@@ -2092,11 +2182,7 @@ function generateReportPDFFromData(report) {
     y += 15;
     
     doc.setFontSize(8);
-    if (report.location && report.location.includes('Mobil')) {
-      doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
-    } else {
-      doc.text('Note: Dette er en gemt rapport.', 14, y);
-    }
+    doc.text('Note: Dette er en gemt rapport.', 14, y);
     y += 7;
     doc.text('Rapport ID: ' + report.id, 14, y);
     
@@ -2111,18 +2197,106 @@ function generateReportPDFFromData(report) {
 }
 
 // Download rapport
-function downloadReport(reportId) {
+async function downloadReport(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
   if (!report) {
     alert('Rapport ikke fundet');
     return;
   }
   
-  // ALTID download baseret på gemt rapport data - generer IKKE ny rapport
-  generateReportPDFFromDataForDownload(report);
+  // For rapporter fra mobil scanner, hent vine-data og generer fuld PDF
+  // For lokale rapporter, download baseret på gemt data
+  if (report.location && report.location.includes('Mobil')) {
+    await generateFullReportPDFForDownload(report);
+  } else {
+    generateReportPDFFromDataForDownload(report);
+  }
 }
 
-// Generer PDF fra gemt rapport data til download
+// Generer fuld PDF rapport med vine-data til download (for mobil rapporter)
+async function generateFullReportPDFForDownload(report) {
+  try {
+    // Hent vine-data fra backend (samme som mobil scanneren gjorde)
+    const wines = await apiCall('/api/reports/lager');
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text(report.name || 'Lagerrapport - Optælling Afsluttet', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
+    y += 7;
+    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
+    y += 10;
+    
+    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 25, 25, 15, 15, 30];
+    let x = 14;
+    
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+    
+    let totalVærdi = 0;
+    
+    wines.forEach(wine => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+      
+      const pris = wine.indkøbspris || 0;
+      const værdi = pris * (wine.antal || 0);
+      totalVærdi += værdi;
+      
+      x = 14;
+      const row = [
+        wine.vinId || '',
+        wine.navn || '',
+        wine.type || '',
+        wine.land || '',
+        wine.antal || 0,
+        wine.minAntal || 24,
+        pris.toFixed(2)
+      ];
+      
+      row.forEach((cell, i) => {
+        doc.text(String(cell).substring(0, 25), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+    
+    y += 5;
+    doc.setFontSize(10);
+    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    y += 7;
+    doc.setFontSize(8);
+    doc.text('Rapport ID: ' + report.id, 14, y);
+    
+    // Download PDF
+    const fileName = (report.name || 'rapport').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.pdf';
+    doc.save(fileName);
+  } catch (error) {
+    console.error('Fejl ved generering af fuld PDF:', error);
+    alert('Kunne ikke downloade rapport. Fejl: ' + error.message);
+  }
+}
+
+// Generer PDF fra gemt rapport data til download (for lokale rapporter)
 function generateReportPDFFromDataForDownload(report) {
   try {
     const { jsPDF } = window.jspdf;
@@ -2147,7 +2321,7 @@ function generateReportPDFFromDataForDownload(report) {
     y += 15;
     
     doc.setFontSize(8);
-    doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
+    doc.text('Note: Dette er en gemt rapport.', 14, y);
     y += 7;
     doc.text('Rapport ID: ' + report.id, 14, y);
     
