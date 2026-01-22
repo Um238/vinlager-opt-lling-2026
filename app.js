@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v45
+// VINLAGER OPTÆLLING 2026 - APP.JS v46
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v45 - ALLE rapporter får fuld PDF med vine-data');
+console.log('Version: v46 - Arkiveringsknap forbedret');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2047,7 +2047,7 @@ function renderReportsTable() {
       <td style="padding: 0.75rem;">
         <button class="btn-secondary" onclick="viewReportPDF('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">Vis PDF</button>
         <button class="btn-secondary" onclick="downloadReport('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">📥 Download</button>
-        ${!report.archived ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; padding: 0.25rem 0.5rem; font-size: 0.9em;">📦 Arkiver</button>` : `<button class="btn-secondary" onclick="unarchiveReport('${report.id}')" style="background: #4CAF50; padding: 0.25rem 0.5rem; font-size: 0.9em;">↩️ Gendan</button>`}
+        ${(report.archived === undefined || !report.archived) ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;">📦 Arkiver</button>` : `<button class="btn-secondary" onclick="unarchiveReport('${report.id}')" style="background: #4CAF50; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;">↩️ Gendan</button>`}
       </td>
     `;
     tbody.appendChild(row);
