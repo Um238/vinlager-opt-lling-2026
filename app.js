@@ -414,13 +414,42 @@ async function apiCall(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Fejl ved API kald');
+      // Tjek om responsen er JSON eller HTML
+      const contentType = response.headers.get('content-type');
+      let errorMessage = `API fejl: ${response.status} ${response.statusText}`;
+      
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // Hvis JSON parsing fejler, brug standard fejlbesked
+        }
+      } else {
+        // Hvis det er HTML (fx 404 side), læs teksten men brug ikke den
+        const text = await response.text();
+        if (response.status === 404) {
+          errorMessage = `API endpoint ikke fundet: ${endpoint}. Backend serveren mangler denne rute.`;
+        } else {
+          errorMessage = `Server fejl (${response.status}): ${response.statusText}`;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    // Tjek om responsen er JSON før parsing
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    } else {
+      // Hvis ikke JSON, returner tekst
+      const text = await response.text();
+      console.warn('⚠️ Backend returnerede ikke JSON, men:', contentType);
+      return text;
+    }
   } catch (error) {
     console.error('API fejl:', error);
+    console.error('Endpoint:', endpoint);
     throw error;
   }
 }
@@ -1840,31 +1869,47 @@ function renderReportsTable() {
   // Opdater lokation dropdown med faktiske lokationer
   updateLocationFilter();
   
-  let filtered = reportsHistory.filter(r => !r.archived || periodFilter === 'all' || locationFilter === 'all'); // Vis kun ikke-arkiverede som standard, medmindre filter er sat
+  // Start med alle rapporter
+  let filtered = [...reportsHistory];
   
   // Filtrer efter periode
   if (periodFilter !== 'all') {
     const now = new Date();
     filtered = filtered.filter(r => {
-      // Parse dansk dato format: "20.1.2026, 08.28.13"
+      // Parse dato - håndter forskellige formater
       let reportDate;
       try {
-        // Prøv at parse dansk format først
-        const dateStr = r.date.replace(/,.*$/, ''); // Fjern tid del: "20.1.2026"
-        const parts = dateStr.split('.');
-        if (parts.length === 3) {
-          // Format: dd.mm.yyyy
-          reportDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        } else {
-          // Fallback til standard parsing
+        const dateStr = r.date || '';
+        
+        // Prøv ISO format først (fra backend): "2026-01-22 08:30:00"
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+          reportDate = new Date(dateStr.replace(' ', 'T'));
+        }
+        // Prøv dansk format: "20.1.2026, 08.28.13" eller "20.1.2026"
+        else if (dateStr.includes('.')) {
+          const dateOnly = dateStr.replace(/,.*$/, ''); // Fjern tid del
+          const parts = dateOnly.split('.');
+          if (parts.length === 3) {
+            // Format: dd.mm.yyyy eller d.m.yyyy
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1;
+            const year = parseInt(parts[2]);
+            reportDate = new Date(year, month, day);
+          } else {
+            reportDate = new Date(dateStr);
+          }
+        }
+        // Fallback til standard parsing
+        else {
           reportDate = new Date(r.date);
         }
       } catch (e) {
-        // Fallback til standard parsing
-        reportDate = new Date(r.date);
+        console.warn('Kunne ikke parse dato:', r.date, e);
+        return false; // Ugyldig dato - udelad fra filter
       }
       
       if (isNaN(reportDate.getTime())) {
+        console.warn('Ugyldig dato:', r.date);
         return false; // Ugyldig dato
       }
       
@@ -1939,12 +1984,62 @@ function renderReportsTable() {
 // Vis rapport PDF i browser (ikke download)
 function viewReportPDF(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
-  if (!report) return;
+  if (!report) {
+    alert('Rapport ikke fundet');
+    return;
+  }
   
-  if (report.type === 'lager') {
-    generateLagerReportViewOnly();
+  // For rapporter fra mobil scanner, vis en simuleret PDF baseret på rapport data
+  // I stedet for at generere en ny rapport baseret på nuværende lager
+  if (report.location && report.location.includes('Mobil')) {
+    // Vis simuleret PDF for mobil rapporter
+    generateReportPDFFromData(report);
   } else {
-    generateVærdiReportViewOnly();
+    // For lokale rapporter, generer baseret på nuværende lager
+    if (report.type === 'lager') {
+      generateLagerReportViewOnly();
+    } else {
+      generateVærdiReportViewOnly();
+    }
+  }
+}
+
+// Generer PDF fra gemt rapport data (ikke fra nuværende lager)
+function generateReportPDFFromData(report) {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text(report.name || 'Rapport', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Type: ' + (report.type === 'lager' ? 'Lagerrapport' : 'Værdirapport'), 14, y);
+    y += 7;
+    doc.text('Dato: ' + (report.date || 'Ukendt'), 14, y);
+    y += 7;
+    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
+    y += 7;
+    doc.text('Antal vine: ' + (report.wineCount || 0), 14, y);
+    y += 7;
+    const totalValue = typeof report.totalValue === 'number' ? report.totalValue : parseFloat(report.totalValue) || 0;
+    doc.text('Total værdi: ' + totalValue.toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kr.', 14, y);
+    y += 15;
+    
+    doc.setFontSize(8);
+    doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
+    y += 7;
+    doc.text('Rapport ID: ' + report.id, 14, y);
+    
+    // Vis PDF i browser (samme metode som de andre view-only funktioner)
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    window.open(pdfUrl, '_blank');
+  } catch (error) {
+    console.error('Fejl ved generering af PDF fra data:', error);
+    alert('Kunne ikke vise rapport. Fejl: ' + error.message);
   }
 }
 
@@ -1953,20 +2048,84 @@ function downloadReport(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
   if (!report) return;
   
-  if (report.type === 'lager') {
-    generateLagerReportDownload();
+  // For rapporter fra mobil, download baseret på data
+  if (report.location && report.location.includes('Mobil')) {
+    generateReportPDFFromDataForDownload(report);
   } else {
-    generateVærdiReportDownload();
+    // For lokale rapporter, generer baseret på nuværende lager
+    if (report.type === 'lager') {
+      generateLagerReportDownload();
+    } else {
+      generateVærdiReportDownload();
+    }
+  }
+}
+
+// Generer PDF fra gemt rapport data til download
+function generateReportPDFFromDataForDownload(report) {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text(report.name || 'Rapport', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Type: ' + (report.type === 'lager' ? 'Lagerrapport' : 'Værdirapport'), 14, y);
+    y += 7;
+    doc.text('Dato: ' + (report.date || 'Ukendt'), 14, y);
+    y += 7;
+    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
+    y += 7;
+    doc.text('Antal vine: ' + (report.wineCount || 0), 14, y);
+    y += 7;
+    const totalValue = typeof report.totalValue === 'number' ? report.totalValue : parseFloat(report.totalValue) || 0;
+    doc.text('Total værdi: ' + totalValue.toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kr.', 14, y);
+    y += 15;
+    
+    doc.setFontSize(8);
+    doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
+    y += 7;
+    doc.text('Rapport ID: ' + report.id, 14, y);
+    
+    // Download PDF
+    const fileName = (report.name || 'rapport').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.pdf';
+    doc.save(fileName);
+  } catch (error) {
+    console.error('Fejl ved generering af PDF fra data:', error);
+    alert('Kunne ikke downloade rapport. Fejl: ' + error.message);
   }
 }
 
 // Arkiver rapport
-function archiveReport(reportId) {
+async function archiveReport(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
-  if (report) {
+  if (!report) {
+    alert('Rapport ikke fundet');
+    return;
+  }
+  
+  try {
+    // Opdater i backend
+    await apiCall(`/api/reports/${reportId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ archived: true })
+    });
+    
+    // Opdater lokalt
     report.archived = true;
     localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
     renderReportsTable();
+    console.log('✅ Rapport arkiveret i backend');
+  } catch (error) {
+    console.error('Fejl ved arkivering:', error);
+    // Fallback: Gem kun lokalt hvis backend fejler
+    report.archived = true;
+    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    renderReportsTable();
+    alert('⚠️ Rapport arkiveret lokalt, men kunne ikke gemmes i backend');
   }
 }
 
