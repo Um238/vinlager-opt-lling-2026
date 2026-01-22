@@ -344,7 +344,7 @@
     </div>
   </div>
 
-  <script src="config.js?v=34"></script>
+  <script src="config.js?v=35"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
@@ -681,6 +681,7 @@
         // Gem rapport i backend
         try {
           const config = getConfig();
+          console.log('💾 Gemmer rapport i backend:', reportData);
           const response = await fetch(`${config.API_URL}/api/reports/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -691,11 +692,17 @@
           if (response.ok) {
             const result = await response.json();
             console.log('✅ Rapport gemt i backend:', result);
-            localStorage.setItem('newReportAvailable', 'true');
-            localStorage.setItem('newReportId', reportData.reportId);
+            // Fjern localStorage flag - vi bruger backend nu
+            localStorage.removeItem('newReportAvailable');
+            localStorage.removeItem('newReportId');
+          } else {
+            const errorText = await response.text();
+            console.error('❌ Backend fejl:', response.status, errorText);
+            throw new Error(`Backend fejl: ${response.status}`);
           }
         } catch (error) {
-          console.error('Fejl ved gemning i backend:', error);
+          console.error('❌ Fejl ved gemning i backend:', error);
+          alert('⚠️ Advarsel: Rapport kunne ikke gemmes i backend. Den er kun gemt lokalt på telefonen.');
         }
         
         doc.save('lagerrapport_optælling.pdf');

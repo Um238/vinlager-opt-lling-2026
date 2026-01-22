@@ -74,14 +74,16 @@ function startAutoUpdate() {
         loadWines();
       }
       
-      // Tjek for ny rapport fra mobil
-      checkForNewReport();
-      
       // Opdater rapporter hvis vi er på rapporter siden - ALTID hent fra backend
       if (currentPage === 'rapporter') {
         // Force refresh fra backend hver gang
-        loadReportsHistory();
+        if (typeof loadReportsHistory === 'function') {
+          loadReportsHistory();
+        }
       }
+      
+      // Tjek for ny rapport fra mobil (opdaterer også rapporter)
+      checkForNewReport();
     }
   }, 5000); // 5 sekunder
   
@@ -1635,6 +1637,13 @@ let reportsHistory = [];
 
 // Tjek for ny rapport fra mobil scanner
 function checkForNewReport() {
+  // ALTID opdater rapporter fra backend (ikke kun hvis localStorage flag er sat)
+  // Dette sikrer at rapporter fra mobil vises på PC
+  if (typeof loadReportsHistory === 'function') {
+    loadReportsHistory();
+  }
+  
+  // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
   const newReportAvailable = localStorage.getItem('newReportAvailable');
   if (newReportAvailable === 'true') {
     // Vis notifikation
@@ -1647,11 +1656,6 @@ function checkForNewReport() {
       <button onclick="this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: transparent; color: white; border: 1px solid white; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Luk</button>
     `;
     document.body.appendChild(notification);
-    
-    // Opdater rapporter med det samme fra backend
-    if (typeof loadReportsHistory === 'function') {
-      loadReportsHistory();
-    }
     
     // Auto-fjern efter 10 sekunder
     setTimeout(() => {
@@ -1679,18 +1683,19 @@ async function loadReportsHistory() {
     try {
       const backendReports = await apiCall('/api/reports/history');
       console.log('📊 Backend returnerede:', backendReports?.length || 0, 'rapporter');
+      console.log('📊 Første rapport:', backendReports?.[0]);
       
       if (backendReports && Array.isArray(backendReports)) {
         // Brug backend data - dette sikrer at rapporter fra mobil også vises
         reportsHistory = backendReports.map(r => ({
-          id: r.id || r.reportId,
-          date: r.date || r.created,
-          name: r.name,
-          type: r.type,
-          wineCount: r.wineCount || 0,
-          totalValue: r.totalValue || 0,
+          id: r.id || r.reportId || r.report_id,
+          date: r.date || r.created || r.created_at,
+          name: r.name || r.report_name,
+          type: r.type || r.report_type || 'lager',
+          wineCount: r.wineCount || r.wine_count || r.wineCount || 0,
+          totalValue: r.totalValue || r.total_value || r.totalValue || 0,
           location: r.location || 'Mobil Optælling',
-          archived: r.archived === 1 || r.archived === true
+          archived: r.archived === 1 || r.archived === true || false
         }));
         // Sorter efter dato (nyeste først)
         reportsHistory.sort((a, b) => {
@@ -1701,6 +1706,9 @@ async function loadReportsHistory() {
         // Gem også i localStorage som backup
         localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
         console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
+        if (reportsHistory.length > 0) {
+          console.log('📋 Eksempel rapport:', reportsHistory[0]);
+        }
       } else {
         // Hvis backend returnerer tom array, brug den alligevel (så vi ikke bruger gammel localStorage data)
         reportsHistory = [];
@@ -1709,6 +1717,7 @@ async function loadReportsHistory() {
       }
     } catch (backendError) {
       console.error('❌ Fejl ved hentning fra backend:', backendError);
+      console.error('❌ Fejl detaljer:', backendError.message, backendError.stack);
       // Fallback til localStorage kun hvis backend fejler
       const saved = localStorage.getItem('reportsHistory');
       if (saved) {
@@ -1761,7 +1770,10 @@ async function saveReportToHistory(reportName, reportType, wineCount, totalValue
   
   // Gem i backend
   try {
-    await apiCall('/api/reports/save', 'POST', report);
+    await apiCall('/api/reports/save', {
+      method: 'POST',
+      body: JSON.stringify(report)
+    });
     console.log('✅ Rapport gemt i backend');
   } catch (error) {
     console.error('Fejl ved gemning i backend:', error);
