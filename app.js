@@ -1877,21 +1877,34 @@ function renderReportsTable() {
   if (periodFilter !== 'all') {
     const now = new Date();
     const originalCount = filtered.length;
+    console.log(`🔍 Starter periode filter "${periodFilter}" med ${originalCount} rapporter`);
     filtered = filtered.filter(r => {
       // Parse dato - håndter forskellige formater
       let reportDate;
       try {
         const dateStr = r.date || '';
+        if (!dateStr) {
+          console.warn('Rapport mangler dato:', r);
+          return false;
+        }
         
         // Prøv ISO format først (fra backend): "2026-01-22 08:30:00" eller "2026-01-22T08:30:00"
         if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
           // Håndter både "2026-01-22 08:30:00" og "2026-01-22T08:30:00"
-          const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+          let isoStr = dateStr;
+          if (!dateStr.includes('T') && dateStr.includes(' ')) {
+            isoStr = dateStr.replace(' ', 'T');
+          }
           reportDate = new Date(isoStr);
           // Hvis parsing fejler, prøv med kun dato del
           if (isNaN(reportDate.getTime())) {
-            const dateOnly = dateStr.split(/[\sT]/)[0]; // Få kun dato delen
+            const dateOnly = dateStr.split(/[\sT]/)[0]; // Få kun dato delen "2026-01-22"
             reportDate = new Date(dateOnly + 'T00:00:00');
+          }
+          // Verificer at dato er korrekt
+          if (isNaN(reportDate.getTime())) {
+            console.warn('Kunne ikke parse ISO dato:', dateStr);
+            return false;
           }
         }
         // Prøv dansk format: "20.1.2026, 08.28.13" eller "20.1.2026"
@@ -1934,9 +1947,31 @@ function renderReportsTable() {
         weekAgo.setHours(0, 0, 0, 0);
         const todayEnd = new Date(today);
         todayEnd.setHours(23, 59, 59, 999);
+        
+        // Normaliser rapport dato til start af dagen
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        reportDay.setHours(0, 0, 0, 0); // Sæt til start af dagen for korrekt sammenligning
-        const isInRange = reportDay.getTime() >= weekAgo.getTime() && reportDay.getTime() <= todayEnd.getTime();
+        reportDay.setHours(0, 0, 0, 0);
+        
+        // Sammenlign timestamp værdier
+        const reportTime = reportDay.getTime();
+        const weekAgoTime = weekAgo.getTime();
+        const todayEndTime = todayEnd.getTime();
+        
+        const isInRange = reportTime >= weekAgoTime && reportTime <= todayEndTime;
+        
+        // Debug logging for alle rapporter
+        console.log('Week filter check:', {
+          reportDate: r.date,
+          parsedDate: reportDate.toISOString(),
+          reportDay: reportDay.toISOString(),
+          weekAgo: weekAgo.toISOString(),
+          todayEnd: todayEnd.toISOString(),
+          reportTime,
+          weekAgoTime,
+          todayEndTime,
+          isInRange
+        });
+        
         return isInRange;
       } else if (periodFilter === 'thisMonth') {
         // Denne måned = nuværende kalendermåned
@@ -1955,7 +1990,9 @@ function renderReportsTable() {
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
         return reportDay >= lastMonthStart && reportDay <= lastMonthEnd;
       }
-      return false; // Hvis ingen match, returner false
+      // Hvis vi når hertil uden at matche nogen periode, returner false
+      console.warn('Ukendt periode filter:', periodFilter, 'for rapport:', r.date);
+      return false;
     });
     console.log(`Periode filter "${periodFilter}": ${originalCount} → ${filtered.length} rapporter`);
   }
