@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v43
+// VINLAGER OPTÆLLING 2026 - APP.JS v44
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v43');
+console.log('Version: v44 - PDF Fix med vine-data');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2076,10 +2076,24 @@ async function viewReportPDF(reportId) {
 // Generer fuld PDF rapport med vine-data (for mobil rapporter)
 async function generateFullReportPDF(report) {
   try {
+    console.log('📄 Genererer fuld PDF for rapport:', report);
+    
     // Hent vine-data fra backend (samme som mobil scanneren gjorde)
+    console.log('🔍 Henter vine-data fra backend...');
     const wines = await apiCall('/api/reports/lager');
+    console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      console.warn('⚠️ Ingen vine-data fundet!');
+      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine.');
+      return;
+    }
     
     const { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+      throw new Error('jsPDF bibliotek ikke fundet');
+    }
+    
     const doc = new jsPDF();
     
     let y = 20;
@@ -2105,6 +2119,7 @@ async function generateFullReportPDF(report) {
     y += 6;
     
     let totalVærdi = 0;
+    let wineCount = 0;
     
     wines.forEach(wine => {
       if (y > 280) {
@@ -2121,6 +2136,7 @@ async function generateFullReportPDF(report) {
       const pris = wine.indkøbspris || 0;
       const værdi = pris * (wine.antal || 0);
       totalVærdi += værdi;
+      wineCount++;
       
       x = 14;
       const row = [
@@ -2140,20 +2156,27 @@ async function generateFullReportPDF(report) {
       y += 6;
     });
     
+    console.log(`✅ Tilføjet ${wineCount} vine til PDF`);
+    
     y += 5;
     doc.setFontSize(10);
     doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
     y += 7;
     doc.setFontSize(8);
+    doc.text(`Antal vine: ${wineCount}`, 14, y);
+    y += 7;
     doc.text('Rapport ID: ' + report.id, 14, y);
     
     // Vis PDF i browser
+    console.log('📄 Åbner PDF i browser...');
     const pdfBlob = doc.output('blob');
     const pdfUrl = URL.createObjectURL(pdfBlob);
     window.open(pdfUrl, '_blank');
+    console.log('✅ PDF åbnet');
   } catch (error) {
-    console.error('Fejl ved generering af fuld PDF:', error);
-    alert('Kunne ikke vise rapport. Fejl: ' + error.message);
+    console.error('❌ Fejl ved generering af fuld PDF:', error);
+    console.error('Fejl detaljer:', error.stack);
+    alert('Kunne ikke vise rapport. Fejl: ' + error.message + '\n\nTjek console for flere detaljer.');
   }
 }
 
@@ -2216,10 +2239,23 @@ async function downloadReport(reportId) {
 // Generer fuld PDF rapport med vine-data til download (for mobil rapporter)
 async function generateFullReportPDFForDownload(report) {
   try {
+    console.log('📥 Downloader fuld PDF for rapport:', report);
+    
     // Hent vine-data fra backend (samme som mobil scanneren gjorde)
     const wines = await apiCall('/api/reports/lager');
+    console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      console.warn('⚠️ Ingen vine-data fundet!');
+      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine.');
+      return;
+    }
     
     const { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+      throw new Error('jsPDF bibliotek ikke fundet');
+    }
+    
     const doc = new jsPDF();
     
     let y = 20;
@@ -2245,6 +2281,7 @@ async function generateFullReportPDFForDownload(report) {
     y += 6;
     
     let totalVærdi = 0;
+    let wineCount = 0;
     
     wines.forEach(wine => {
       if (y > 280) {
@@ -2261,6 +2298,7 @@ async function generateFullReportPDFForDownload(report) {
       const pris = wine.indkøbspris || 0;
       const værdi = pris * (wine.antal || 0);
       totalVærdi += værdi;
+      wineCount++;
       
       x = 14;
       const row = [
@@ -2285,14 +2323,18 @@ async function generateFullReportPDFForDownload(report) {
     doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
     y += 7;
     doc.setFontSize(8);
+    doc.text(`Antal vine: ${wineCount}`, 14, y);
+    y += 7;
     doc.text('Rapport ID: ' + report.id, 14, y);
     
     // Download PDF
     const fileName = (report.name || 'rapport').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.pdf';
     doc.save(fileName);
+    console.log('✅ PDF downloadet:', fileName);
   } catch (error) {
-    console.error('Fejl ved generering af fuld PDF:', error);
-    alert('Kunne ikke downloade rapport. Fejl: ' + error.message);
+    console.error('❌ Fejl ved generering af fuld PDF:', error);
+    console.error('Fejl detaljer:', error.stack);
+    alert('Kunne ikke downloade rapport. Fejl: ' + error.message + '\n\nTjek console for flere detaljer.');
   }
 }
 
