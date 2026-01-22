@@ -1,42 +1,87 @@
 const db = require('../config/database');
 const path = require('path');
 
-// Hent alle vine
+// Hent alle vine med lokation data (fra inventory system)
 exports.getAll = (req, res) => {
-  const { reol, hylde } = req.query;
-  let query = 'SELECT * FROM wines WHERE 1=1';
+  const { reol, hylde, location } = req.query;
+  
+  // Hent alle vine med deres inventory data (inkl. lokation)
+  let query = `
+    SELECT 
+      w.id,
+      w.vinId,
+      w.varenummer,
+      w.navn,
+      w.type,
+      w.kategori,
+      w.land,
+      w.region,
+      w.drue,
+      w.årgang,
+      w.indkøbspris,
+      w.billede,
+      w.oprettet,
+      w.opdateret,
+      l.name as lokation,
+      i.reol,
+      i.hylde,
+      i.antal,
+      i.minAntal
+    FROM wines w
+    INNER JOIN inventory i ON w.id = i.wine_id
+    INNER JOIN locations l ON i.location_id = l.id
+    WHERE 1=1
+  `;
   const params = [];
 
   if (reol) {
-    query += ' AND reol = ?';
+    query += ' AND i.reol = ?';
     params.push(reol);
   }
   if (hylde) {
-    query += ' AND hylde = ?';
+    query += ' AND i.hylde = ?';
     params.push(hylde);
   }
+  if (location) {
+    query += ' AND l.name = ?';
+    params.push(location);
+  }
 
-  query += ' ORDER BY reol, hylde, navn';
+  query += ' ORDER BY w.navn, l.name, i.reol, i.hylde';
 
   db.all(query, params, (err, rows) => {
     if (err) {
+      console.error('Fejl ved hentning af vine:', err);
       return res.status(500).json({ error: 'Fejl ved hentning af vine' });
     }
     res.json(rows);
   });
 };
 
-// Hent vin efter vinId
+// Hent vin efter vinId eller varenummer
 exports.getByVinId = (req, res) => {
   const { vinId } = req.params;
+  
+  // Søg først på vinId, hvis ikke fundet søg på varenummer
   db.get('SELECT * FROM wines WHERE vinId = ?', [vinId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: 'Fejl ved hentning af vin' });
     }
-    if (!row) {
-      return res.status(404).json({ error: 'Vin ikke fundet' });
+    
+    if (row) {
+      return res.json(row);
     }
-    res.json(row);
+    
+    // Hvis ikke fundet på vinId, prøv varenummer
+    db.get('SELECT * FROM wines WHERE varenummer = ?', [vinId], (err, row2) => {
+      if (err) {
+        return res.status(500).json({ error: 'Fejl ved hentning af vin' });
+      }
+      if (!row2) {
+        return res.status(404).json({ error: 'Vin ikke fundet (søgte på VIN-ID og varenummer)' });
+      }
+      res.json(row2);
+    });
   });
 };
 
@@ -69,7 +114,7 @@ exports.create = (req, res) => {
     wine.reol || null,
     wine.hylde || null,
     wine.antal || 0,
-    wine.minAntal || 0,
+    wine.minAntal || 24, // Standard minimum er 24 flasker
     wine.indkøbspris || null,
     wine.billede || null
   ], function(err) {
@@ -144,16 +189,32 @@ exports.uploadImage = (req, res) => {
   }
 
   const { vinId } = req.params;
-  const imagePath = `/uploads/images/${req.file.filename}`;
+  const imageFilename = req.file.filename;
+  
+  console.log('Upload billede:', {
+    vinId: vinId,
+    filename: imageFilename,
+    path: req.file.path,
+    size: req.file.size
+  });
+
+  // Tjek om filen faktisk eksisterer
+  const fs = require('fs');
+  if (!fs.existsSync(req.file.path)) {
+    console.error('Billedfil eksisterer ikke:', req.file.path);
+    return res.status(500).json({ error: 'Billedfil kunne ikke gemmes' });
+  }
 
   db.run(
     'UPDATE wines SET billede = ? WHERE vinId = ?',
-    [imagePath, vinId],
+    [imageFilename, vinId],
     function(err) {
       if (err) {
+        console.error('Database fejl:', err);
         return res.status(500).json({ error: 'Fejl ved opdatering af billede' });
       }
-      res.json({ message: 'Billede uploadet', path: imagePath });
+      console.log('Billede opdateret i database:', imageFilename);
+      res.json({ message: 'Billede uploadet', filename: imageFilename });
     }
   );
 };
