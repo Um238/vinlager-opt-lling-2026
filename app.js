@@ -1327,6 +1327,14 @@ async function doImport() {
 
   const mode = document.querySelector('input[name="import-mode"]:checked').value;
   
+  // Advarsel hvis overskriv mode er valgt
+  if (mode === 'overskriv') {
+    const confirmed = confirm('⚠️ ADVARSEL: Du er ved at overskrive hele lageret!\n\nDette vil slette alle eksisterende vine og erstatte dem med data fra filen.\n\nEr du helt sikker?');
+    if (!confirmed) {
+      return;
+    }
+  }
+  
   const formData = new FormData();
   formData.append('file', file);
   formData.append('mode', mode);
@@ -1619,10 +1627,15 @@ function checkForNewReport() {
     notification.innerHTML = `
       <h3 style="margin: 0 0 10px 0;">✅ Ny rapport tilgængelig!</h3>
       <p style="margin: 0 0 15px 0;">Optælling fra mobil er afsluttet.</p>
-      <button onclick="showReportsPage(); this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: white; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">Se rapport</button>
+      <button onclick="showReportsPage(); this.parentElement.remove(); localStorage.removeItem('newReportAvailable'); loadReportsHistory();" style="background: white; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">Se rapport</button>
       <button onclick="this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: transparent; color: white; border: 1px solid white; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Luk</button>
     `;
     document.body.appendChild(notification);
+    
+    // Opdater rapporter med det samme fra backend
+    if (typeof loadReportsHistory === 'function') {
+      loadReportsHistory();
+    }
     
     // Auto-fjern efter 10 sekunder
     setTimeout(() => {
@@ -1636,7 +1649,7 @@ function checkForNewReport() {
 // Vis rapporter side
 function showReportsPage() {
   showPage('rapporter');
-  // Opdater rapporter
+  // Opdater rapporter - ALTID hent fra backend så vi får nye rapporter fra mobil
   if (typeof loadReportsHistory === 'function') {
     loadReportsHistory();
   }
@@ -1645,11 +1658,11 @@ function showReportsPage() {
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
-    // Prøv først at hente fra backend
+    // ALTID hent fra backend først (så vi får rapporter fra mobil)
     try {
       const backendReports = await apiCall('/api/reports/history');
       if (backendReports && Array.isArray(backendReports)) {
-        // Brug backend data selv hvis tom (så vi får nye rapporter)
+        // Brug backend data - dette sikrer at rapporter fra mobil også vises
         reportsHistory = backendReports.map(r => ({
           id: r.id || r.reportId,
           date: r.date || r.created,
@@ -1664,14 +1677,25 @@ async function loadReportsHistory() {
         localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
         console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
       } else {
-        throw new Error('Ingen rapporter i backend');
+        // Hvis backend returnerer tom array, brug den alligevel (så vi ikke bruger gammel localStorage data)
+        reportsHistory = [];
+        localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+        console.log('✅ Backend returnerede tom liste - nulstiller rapporter');
       }
     } catch (backendError) {
-      console.warn('Kunne ikke hente fra backend, bruger localStorage:', backendError);
-      // Fallback til localStorage
+      console.warn('Kunne ikke hente fra backend, prøver localStorage som fallback:', backendError);
+      // Fallback til localStorage kun hvis backend fejler
       const saved = localStorage.getItem('reportsHistory');
       if (saved) {
-        reportsHistory = JSON.parse(saved);
+        try {
+          reportsHistory = JSON.parse(saved);
+          console.log('⚠️ Bruger localStorage backup:', reportsHistory.length, 'rapporter');
+        } catch (parseError) {
+          console.error('Fejl ved parsing af localStorage:', parseError);
+          reportsHistory = [];
+        }
+      } else {
+        reportsHistory = [];
       }
       // Prøv at hente fra backend igen efter 3 sekunder
       setTimeout(() => {
@@ -1683,6 +1707,17 @@ async function loadReportsHistory() {
     renderReportsTable();
   } catch (error) {
     console.error('Fejl ved indlæsning af rapport historik:', error);
+    // Prøv at bruge localStorage som sidste fallback
+    const saved = localStorage.getItem('reportsHistory');
+    if (saved) {
+      try {
+        reportsHistory = JSON.parse(saved);
+        updateLocationFilter();
+        renderReportsTable();
+      } catch (parseError) {
+        console.error('Fejl ved parsing af localStorage:', parseError);
+      }
+    }
   }
 }
 
