@@ -287,6 +287,14 @@
               <option value="all">Alle</option>
             </select>
           </label>
+          <label style="display: flex; align-items: center; margin-left: 1rem;">
+            <strong>Vis:</strong>
+            <select id="report-archived-filter" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="active">Kun aktive</option>
+              <option value="archived">Kun arkiverede</option>
+              <option value="all">Alle</option>
+            </select>
+          </label>
         </div>
 
         <!-- Generer nye rapporter -->
@@ -520,7 +528,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=36"></script>
+      <script src="app.js?v=37"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

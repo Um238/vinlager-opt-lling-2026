@@ -1865,6 +1865,7 @@ function renderReportsTable() {
   
   const periodFilter = document.getElementById('report-period')?.value || 'all';
   const locationFilter = document.getElementById('report-location')?.value || 'all';
+  const archivedFilter = document.getElementById('report-archived-filter')?.value || 'active';
   
   // Opdater lokation dropdown med faktiske lokationer
   updateLocationFilter();
@@ -1881,9 +1882,10 @@ function renderReportsTable() {
       try {
         const dateStr = r.date || '';
         
-        // Prøv ISO format først (fra backend): "2026-01-22 08:30:00"
+        // Prøv ISO format først (fra backend): "2026-01-22 08:30:00" eller "2026-01-22T08:30:00"
         if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-          reportDate = new Date(dateStr.replace(' ', 'T'));
+          // Håndter både "2026-01-22 08:30:00" og "2026-01-22T08:30:00"
+          reportDate = new Date(dateStr.replace(' ', 'T').replace(/T(\d{2}):(\d{2}):(\d{2})/, 'T$1:$2:$3'));
         }
         // Prøv dansk format: "20.1.2026, 08.28.13" eller "20.1.2026"
         else if (dateStr.includes('.')) {
@@ -1949,8 +1951,13 @@ function renderReportsTable() {
     filtered = filtered.filter(r => r.location === locationFilter);
   }
   
-  // Filtrer efter arkiveret status - vis kun ikke-arkiverede som standard
-  filtered = filtered.filter(r => !r.archived);
+  // Filtrer efter arkiveret status
+  if (archivedFilter === 'active') {
+    filtered = filtered.filter(r => !r.archived);
+  } else if (archivedFilter === 'archived') {
+    filtered = filtered.filter(r => r.archived);
+  }
+  // Hvis archivedFilter === 'all', vis alle (ingen filter)
   
   tbody.innerHTML = '';
   
@@ -1974,7 +1981,7 @@ function renderReportsTable() {
       <td style="padding: 0.75rem;">
         <button class="btn-secondary" onclick="viewReportPDF('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">Vis PDF</button>
         <button class="btn-secondary" onclick="downloadReport('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">📥 Download</button>
-        ${!report.archived ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; padding: 0.25rem 0.5rem; font-size: 0.9em;">📦 Arkiver</button>` : '<span style="color: #999;">Arkiveret</span>'}
+        ${!report.archived ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; padding: 0.25rem 0.5rem; font-size: 0.9em;">📦 Arkiver</button>` : `<button class="btn-secondary" onclick="unarchiveReport('${report.id}')" style="background: #4CAF50; padding: 0.25rem 0.5rem; font-size: 0.9em;">↩️ Gendan</button>`}
       </td>
     `;
     tbody.appendChild(row);
@@ -1989,19 +1996,9 @@ function viewReportPDF(reportId) {
     return;
   }
   
-  // For rapporter fra mobil scanner, vis en simuleret PDF baseret på rapport data
-  // I stedet for at generere en ny rapport baseret på nuværende lager
-  if (report.location && report.location.includes('Mobil')) {
-    // Vis simuleret PDF for mobil rapporter
-    generateReportPDFFromData(report);
-  } else {
-    // For lokale rapporter, generer baseret på nuværende lager
-    if (report.type === 'lager') {
-      generateLagerReportViewOnly();
-    } else {
-      generateVærdiReportViewOnly();
-    }
-  }
+  // ALTID vis PDF baseret på gemt rapport data - generer IKKE ny rapport
+  // Dette sikrer at vi viser den faktiske rapport der blev gemt, ikke nuværende lager
+  generateReportPDFFromData(report);
 }
 
 // Generer PDF fra gemt rapport data (ikke fra nuværende lager)
@@ -2029,7 +2026,11 @@ function generateReportPDFFromData(report) {
     y += 15;
     
     doc.setFontSize(8);
-    doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
+    if (report.location && report.location.includes('Mobil')) {
+      doc.text('Note: Dette er en gemt rapport fra mobil scanner.', 14, y);
+    } else {
+      doc.text('Note: Dette er en gemt rapport.', 14, y);
+    }
     y += 7;
     doc.text('Rapport ID: ' + report.id, 14, y);
     
@@ -2046,19 +2047,13 @@ function generateReportPDFFromData(report) {
 // Download rapport
 function downloadReport(reportId) {
   const report = reportsHistory.find(r => r.id === reportId);
-  if (!report) return;
-  
-  // For rapporter fra mobil, download baseret på data
-  if (report.location && report.location.includes('Mobil')) {
-    generateReportPDFFromDataForDownload(report);
-  } else {
-    // For lokale rapporter, generer baseret på nuværende lager
-    if (report.type === 'lager') {
-      generateLagerReportDownload();
-    } else {
-      generateVærdiReportDownload();
-    }
+  if (!report) {
+    alert('Rapport ikke fundet');
+    return;
   }
+  
+  // ALTID download baseret på gemt rapport data - generer IKKE ny rapport
+  generateReportPDFFromDataForDownload(report);
 }
 
 // Generer PDF fra gemt rapport data til download
@@ -2121,11 +2116,43 @@ async function archiveReport(reportId) {
     console.log('✅ Rapport arkiveret i backend');
   } catch (error) {
     console.error('Fejl ved arkivering:', error);
+    console.error('Fejl detaljer:', error.message);
     // Fallback: Gem kun lokalt hvis backend fejler
     report.archived = true;
     localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
     renderReportsTable();
-    alert('⚠️ Rapport arkiveret lokalt, men kunne ikke gemmes i backend');
+    alert('⚠️ Rapport arkiveret lokalt, men kunne ikke gemmes i backend. Tjek console for fejl.');
+  }
+}
+
+// Gendan (unarchive) rapport
+async function unarchiveReport(reportId) {
+  const report = reportsHistory.find(r => r.id === reportId);
+  if (!report) {
+    alert('Rapport ikke fundet');
+    return;
+  }
+  
+  try {
+    // Opdater i backend
+    await apiCall(`/api/reports/${reportId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ archived: false })
+    });
+    
+    // Opdater lokalt
+    report.archived = false;
+    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    renderReportsTable();
+    console.log('✅ Rapport gendannet i backend');
+  } catch (error) {
+    console.error('Fejl ved gendannelse:', error);
+    console.error('Fejl detaljer:', error.message);
+    // Fallback: Gem kun lokalt hvis backend fejler
+    report.archived = false;
+    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    renderReportsTable();
+    alert('⚠️ Rapport gendannet lokalt, men kunne ikke gemmes i backend. Tjek console for fejl.');
   }
 }
 
@@ -3144,6 +3171,7 @@ async function finishCounting() {
   window.viewReportPDF = viewReportPDF;
   window.downloadReport = downloadReport;
   window.archiveReport = archiveReport;
+  window.unarchiveReport = unarchiveReport;
   window.generateVærdiReportDownload = generateVærdiReportDownload;
   window.switchAdminTab = switchAdminTab;
   window.handleCreateUser = handleCreateUser;
