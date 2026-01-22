@@ -77,8 +77,9 @@ function startAutoUpdate() {
       // Tjek for ny rapport fra mobil
       checkForNewReport();
       
-      // Opdater rapporter hvis vi er på rapporter siden
+      // Opdater rapporter hvis vi er på rapporter siden - ALTID hent fra backend
       if (currentPage === 'rapporter') {
+        // Force refresh fra backend hver gang
         loadReportsHistory();
       }
     }
@@ -1333,6 +1334,18 @@ async function doImport() {
     if (!confirmed) {
       return;
     }
+    // Dobbel bekræftelse
+    const confirmed2 = confirm('⚠️ SIDSTE ADVARSEL!\n\nDette vil PERMANENT slette alle eksisterende vine!\n\nEr du 100% sikker?');
+    if (!confirmed2) {
+      return;
+    }
+  }
+  
+  // Vis loading
+  const resultsDiv = document.getElementById('import-results');
+  if (resultsDiv) {
+    resultsDiv.style.display = 'block';
+    document.getElementById('import-results-content').innerHTML = '<p>Importerer... Vent venligst.</p>';
   }
   
   const formData = new FormData();
@@ -1359,15 +1372,18 @@ async function doImport() {
     document.getElementById('import-results-content').innerHTML = `
       <div class="success-message">
         <p><strong>Import gennemført!</strong></p>
-        <p>Importeret: ${result.importeret}</p>
-        <p>Opdateret: ${result.opdateret}</p>
+        <p>Importeret: ${result.importeret || 0}</p>
+        <p>Opdateret: ${result.opdateret || 0}</p>
         ${result.fejl && result.fejl.length > 0 ? `<p>Fejl: ${result.fejl.length}</p>` : ''}
+        <p style="margin-top: 10px; color: #4CAF50;"><strong>✅ Varelageret er nu opdateret!</strong></p>
       </div>
     `;
 
-    // Reload wines
+    // Reload wines - FORCE refresh fra backend
+    console.log('🔄 Genindlæser varelager efter import...');
     await loadWines();
     renderLager();
+    console.log('✅ Varelager genindlæst');
   } catch (error) {
     document.getElementById('import-results').style.display = 'block';
     document.getElementById('import-results-content').innerHTML = 
@@ -1658,9 +1674,12 @@ function showReportsPage() {
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
+    console.log('🔄 Henter rapporter fra backend...');
     // ALTID hent fra backend først (så vi får rapporter fra mobil)
     try {
       const backendReports = await apiCall('/api/reports/history');
+      console.log('📊 Backend returnerede:', backendReports?.length || 0, 'rapporter');
+      
       if (backendReports && Array.isArray(backendReports)) {
         // Brug backend data - dette sikrer at rapporter fra mobil også vises
         reportsHistory = backendReports.map(r => ({
@@ -1670,9 +1689,15 @@ async function loadReportsHistory() {
           type: r.type,
           wineCount: r.wineCount || 0,
           totalValue: r.totalValue || 0,
-          location: r.location || 'Lokal',
+          location: r.location || 'Mobil Optælling',
           archived: r.archived === 1 || r.archived === true
         }));
+        // Sorter efter dato (nyeste først)
+        reportsHistory.sort((a, b) => {
+          const dateA = new Date(a.date || 0);
+          const dateB = new Date(b.date || 0);
+          return dateB - dateA;
+        });
         // Gem også i localStorage som backup
         localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
         console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
@@ -1683,7 +1708,7 @@ async function loadReportsHistory() {
         console.log('✅ Backend returnerede tom liste - nulstiller rapporter');
       }
     } catch (backendError) {
-      console.warn('Kunne ikke hente fra backend, prøver localStorage som fallback:', backendError);
+      console.error('❌ Fejl ved hentning fra backend:', backendError);
       // Fallback til localStorage kun hvis backend fejler
       const saved = localStorage.getItem('reportsHistory');
       if (saved) {
