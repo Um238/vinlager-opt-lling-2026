@@ -6,5 +6,7 @@ router.get('/lager', reportsController.getLagerReport);
 router.get('/værdi', reportsController.getVærdiReport);
 router.post('/save', reportsController.saveReport);
 router.get('/history', reportsController.getReportsHistory);
+router.put('/:reportId', reportsController.updateReport);
 module.exports = router;
+
 
