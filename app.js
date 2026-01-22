@@ -1877,7 +1877,8 @@ function renderReportsTable() {
   if (periodFilter !== 'all') {
     const now = new Date();
     const originalCount = filtered.length;
-    console.log(`🔍 Starter periode filter "${periodFilter}" med ${originalCount} rapporter`);
+    console.log(`🔍 Starter periode filter "${periodFilter}" med ${originalCount} rapporter. Nuværende dato: ${now.toISOString()}`);
+    
     filtered = filtered.filter(r => {
       // Parse dato - håndter forskellige formater
       let reportDate;
@@ -1913,9 +1914,9 @@ function renderReportsTable() {
           const parts = dateOnly.split('.');
           if (parts.length === 3) {
             // Format: dd.mm.yyyy eller d.m.yyyy
-            const day = parseInt(parts[0]);
-            const month = parseInt(parts[1]) - 1;
-            const year = parseInt(parts[2]);
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
             reportDate = new Date(year, month, day);
           } else {
             reportDate = new Date(dateStr);
@@ -1935,41 +1936,42 @@ function renderReportsTable() {
         return false; // Ugyldig dato
       }
       
+      // Normaliser rapport dato til start af dagen for alle sammenligninger
+      const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
+      reportDay.setHours(0, 0, 0, 0);
+      const reportDayTime = reportDay.getTime();
+      
       if (periodFilter === 'today') {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        return reportDay.getTime() === today.getTime();
+        today.setHours(0, 0, 0, 0);
+        const todayTime = today.getTime();
+        const matches = reportDayTime === todayTime;
+        if (!matches) {
+          console.log('Today filter - ikke match:', { reportDate: r.date, reportDayTime, todayTime });
+        }
+        return matches;
       } else if (periodFilter === 'week') {
         // Sidste 7 dage fra nu (inkl. i dag)
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        today.setHours(0, 0, 0, 0);
         const weekAgo = new Date(today);
         weekAgo.setDate(today.getDate() - 6); // 6 dage + i dag = 7 dage
         weekAgo.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(today);
-        todayEnd.setHours(23, 59, 59, 999);
         
-        // Normaliser rapport dato til start af dagen
-        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        reportDay.setHours(0, 0, 0, 0);
-        
-        // Sammenlign timestamp værdier
-        const reportTime = reportDay.getTime();
         const weekAgoTime = weekAgo.getTime();
-        const todayEndTime = todayEnd.getTime();
+        const todayTime = today.getTime();
         
-        const isInRange = reportTime >= weekAgoTime && reportTime <= todayEndTime;
+        const isInRange = reportDayTime >= weekAgoTime && reportDayTime <= todayTime;
         
-        // Debug logging for alle rapporter
-        console.log('Week filter check:', {
+        console.log('Week filter:', {
           reportDate: r.date,
-          parsedDate: reportDate.toISOString(),
-          reportDay: reportDay.toISOString(),
-          weekAgo: weekAgo.toISOString(),
-          todayEnd: todayEnd.toISOString(),
-          reportTime,
+          reportDay: reportDay.toISOString().split('T')[0],
+          weekAgo: weekAgo.toISOString().split('T')[0],
+          today: today.toISOString().split('T')[0],
+          reportDayTime,
           weekAgoTime,
-          todayEndTime,
-          isInRange
+          todayTime,
+          isInRange: isInRange ? '✅ MATCH' : '❌ IKKE MATCH'
         });
         
         return isInRange;
@@ -1978,23 +1980,23 @@ function renderReportsTable() {
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
         const thisMonthStart = new Date(currentYear, currentMonth, 1);
+        thisMonthStart.setHours(0, 0, 0, 0);
         const thisMonthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
-        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        return reportDay >= thisMonthStart && reportDay <= thisMonthEnd;
+        return reportDayTime >= thisMonthStart.getTime() && reportDayTime <= thisMonthEnd.getTime();
       } else if (periodFilter === 'lastMonth') {
         // Sidste måned = forrige kalendermåned (ikke sidste 30 dage)
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
         const lastMonthStart = new Date(currentYear, currentMonth - 1, 1);
+        lastMonthStart.setHours(0, 0, 0, 0);
         const lastMonthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
-        const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        return reportDay >= lastMonthStart && reportDay <= lastMonthEnd;
+        return reportDayTime >= lastMonthStart.getTime() && reportDayTime <= lastMonthEnd.getTime();
       }
       // Hvis vi når hertil uden at matche nogen periode, returner false
       console.warn('Ukendt periode filter:', periodFilter, 'for rapport:', r.date);
       return false;
     });
-    console.log(`Periode filter "${periodFilter}": ${originalCount} → ${filtered.length} rapporter`);
+    console.log(`✅ Periode filter "${periodFilter}": ${originalCount} → ${filtered.length} rapporter`);
   }
   
   // Filtrer efter lokation
