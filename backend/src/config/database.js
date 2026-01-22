@@ -37,7 +37,7 @@ function initializeDatabase() {
         reol TEXT,
         hylde TEXT,
         antal INTEGER DEFAULT 0,
-        minAntal INTEGER DEFAULT 0,
+        minAntal INTEGER DEFAULT 24,
         indkøbspris DECIMAL(10, 2),
         billede TEXT,
         oprettet TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -71,12 +71,76 @@ function initializeDatabase() {
       )
     `);
 
+    // Rapporter historik
+    db.run(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reportId TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        wineCount INTEGER DEFAULT 0,
+        totalValue DECIMAL(10, 2) DEFAULT 0,
+        location TEXT,
+        archived INTEGER DEFAULT 0,
+        created TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Indexes
     db.run('CREATE INDEX IF NOT EXISTS idx_wines_vinId ON wines(vinId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_wines_reol_hylde ON wines(reol, hylde)');
     db.run('CREATE INDEX IF NOT EXISTS idx_counts_vinId ON counts(vinId)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_reports_reportId ON reports(reportId)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created)');
 
     console.log('Database initialiseret');
+    
+    // Opret standard admin bruger hvis ingen brugere findes
+    createDefaultAdmin();
+  });
+}
+
+// Opret standard admin bruger (kun hvis ingen brugere findes)
+function createDefaultAdmin() {
+  const bcrypt = require('bcryptjs');
+  
+  // Tjek om der allerede er brugere
+  db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
+    if (err) {
+      console.error('Fejl ved tjek af brugere:', err);
+      return;
+    }
+    
+    // Hvis der allerede er brugere, skip
+    if (result.count > 0) {
+      console.log('Brugere findes allerede i databasen');
+      return;
+    }
+    
+    // Opret standard admin bruger
+    const defaultPassword = 'admin123';
+    bcrypt.hash(defaultPassword, 10, (err, hash) => {
+      if (err) {
+        console.error('Fejl ved hashing af password:', err);
+        return;
+      }
+      
+      db.run(
+        `INSERT INTO users (username, email, password_hash, role) 
+         VALUES (?, ?, ?, ?)`,
+        ['admin', 'admin@vinlager.dk', hash, 'admin'],
+        function(err) {
+          if (err) {
+            console.error('Fejl ved oprettelse af admin bruger:', err);
+          } else {
+            console.log('✅ Standard admin bruger oprettet');
+            console.log('   Brugernavn: admin');
+            console.log('   Password: admin123');
+            console.log('   ⚠️  VIGTIGT: Skift password efter første login!');
+          }
+        }
+      );
+    });
   });
 }
 
