@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v28
+// VINLAGER OPTÆLLING 2026 - APP.JS v43
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v28');
+console.log('Version: v43');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -17,7 +17,7 @@ let currentCount = null;
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS START LOADING ===');
-console.log('Version: v28');
+console.log('Version: v43');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -1878,7 +1878,7 @@ function renderReportsTable() {
     const now = new Date();
     const originalCount = filtered.length;
     console.log('═══════════════════════════════════════════════════════');
-    console.log(`🔍 FILTER VERSION v42 - Starter periode filter "${periodFilter}"`);
+    console.log(`🔍 FILTER VERSION v43 - Starter periode filter "${periodFilter}"`);
     console.log(`📊 Starter med ${originalCount} rapporter`);
     console.log(`📅 Nuværende dato: ${now.toISOString()}`);
     console.log('═══════════════════════════════════════════════════════');
@@ -1955,26 +1955,35 @@ function renderReportsTable() {
         }
         return matches;
       } else if (periodFilter === 'week') {
-        // Sidste 7 dage fra nu (inkl. i dag)
+        // Sidste uge = sidste kalenderuge (mandag til søndag)
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         today.setHours(0, 0, 0, 0);
-        const weekAgo = new Date(today);
-        weekAgo.setDate(today.getDate() - 6); // 6 dage + i dag = 7 dage
-        weekAgo.setHours(0, 0, 0, 0);
         
-        const weekAgoTime = weekAgo.getTime();
-        const todayTime = today.getTime();
+        // Find sidste mandag (start af sidste uge)
+        const dayOfWeek = today.getDay(); // 0 = søndag, 1 = mandag, osv.
+        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Konverter til mandag = 0
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - daysFromMonday - 7); // Gå tilbage til sidste mandag
+        lastMonday.setHours(0, 0, 0, 0);
         
-        const isInRange = reportDayTime >= weekAgoTime && reportDayTime <= todayTime;
+        // Sidste søndag (slut af sidste uge)
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6); // Mandag + 6 dage = søndag
+        lastSunday.setHours(23, 59, 59, 999);
         
-        console.log('Week filter:', {
+        const lastMondayTime = lastMonday.getTime();
+        const lastSundayTime = lastSunday.getTime();
+        
+        const isInRange = reportDayTime >= lastMondayTime && reportDayTime <= lastSundayTime;
+        
+        console.log('Week filter (sidste kalenderuge):', {
           reportDate: r.date,
           reportDay: reportDay.toISOString().split('T')[0],
-          weekAgo: weekAgo.toISOString().split('T')[0],
-          today: today.toISOString().split('T')[0],
+          lastMonday: lastMonday.toISOString().split('T')[0],
+          lastSunday: lastSunday.toISOString().split('T')[0],
           reportDayTime,
-          weekAgoTime,
-          todayTime,
+          lastMondayTime,
+          lastSundayTime,
           isInRange: isInRange ? '✅ MATCH' : '❌ IKKE MATCH'
         });
         
