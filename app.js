@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v44
+// VINLAGER OPTÆLLING 2026 - APP.JS v45
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v44 - PDF Fix med vine-data');
+console.log('Version: v45 - ALLE rapporter får fuld PDF med vine-data');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2062,15 +2062,8 @@ async function viewReportPDF(reportId) {
     return;
   }
   
-  // For rapporter fra mobil scanner, hent vine-data og generer fuld PDF
-  // For lokale rapporter, vis baseret på gemt data
-  if (report.location && report.location.includes('Mobil')) {
-    // Hent vine-data og generer fuld PDF ligesom mobil scanneren gjorde
-    await generateFullReportPDF(report);
-  } else {
-    // For lokale rapporter, vis baseret på gemt data
-    generateReportPDFFromData(report);
-  }
+  // ALTID generer fuld PDF med vine-data for ALLE rapporter
+  await generateFullReportPDF(report);
 }
 
 // Generer fuld PDF rapport med vine-data (for mobil rapporter)
@@ -2227,13 +2220,8 @@ async function downloadReport(reportId) {
     return;
   }
   
-  // For rapporter fra mobil scanner, hent vine-data og generer fuld PDF
-  // For lokale rapporter, download baseret på gemt data
-  if (report.location && report.location.includes('Mobil')) {
-    await generateFullReportPDFForDownload(report);
-  } else {
-    generateReportPDFFromDataForDownload(report);
-  }
+  // ALTID generer fuld PDF med vine-data for ALLE rapporter
+  await generateFullReportPDFForDownload(report);
 }
 
 // Generer fuld PDF rapport med vine-data til download (for mobil rapporter)
