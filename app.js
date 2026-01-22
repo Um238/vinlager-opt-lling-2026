@@ -1885,7 +1885,13 @@ function renderReportsTable() {
         // Prøv ISO format først (fra backend): "2026-01-22 08:30:00" eller "2026-01-22T08:30:00"
         if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
           // Håndter både "2026-01-22 08:30:00" og "2026-01-22T08:30:00"
-          reportDate = new Date(dateStr.replace(' ', 'T').replace(/T(\d{2}):(\d{2}):(\d{2})/, 'T$1:$2:$3'));
+          const isoStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+          reportDate = new Date(isoStr);
+          // Hvis parsing fejler, prøv med kun dato del
+          if (isNaN(reportDate.getTime())) {
+            const dateOnly = dateStr.split(/[\sT]/)[0]; // Få kun dato delen
+            reportDate = new Date(dateOnly + 'T00:00:00');
+          }
         }
         // Prøv dansk format: "20.1.2026, 08.28.13" eller "20.1.2026"
         else if (dateStr.includes('.')) {
@@ -1920,11 +1926,17 @@ function renderReportsTable() {
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
         return reportDay.getTime() === today.getTime();
       } else if (periodFilter === 'week') {
-        // Sidste 7 dage fra nu
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // Sidste 7 dage fra nu (inkl. i dag)
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 6); // 6 dage + i dag = 7 dage
         weekAgo.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(today);
+        todayEnd.setHours(23, 59, 59, 999);
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        return reportDay >= weekAgo && reportDay <= now;
+        const isInRange = reportDay >= weekAgo && reportDay <= todayEnd;
+        console.log('Week filter:', { reportDate: r.date, reportDay, weekAgo, todayEnd, isInRange });
+        return isInRange;
       } else if (periodFilter === 'thisMonth') {
         // Denne måned = nuværende kalendermåned
         const currentYear = now.getFullYear();
