@@ -1877,7 +1877,11 @@ function renderReportsTable() {
   if (periodFilter !== 'all') {
     const now = new Date();
     const originalCount = filtered.length;
-    console.log(`🔍 Starter periode filter "${periodFilter}" med ${originalCount} rapporter. Nuværende dato: ${now.toISOString()}`);
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`🔍 FILTER VERSION v42 - Starter periode filter "${periodFilter}"`);
+    console.log(`📊 Starter med ${originalCount} rapporter`);
+    console.log(`📅 Nuværende dato: ${now.toISOString()}`);
+    console.log('═══════════════════════════════════════════════════════');
     
     filtered = filtered.filter(r => {
       // Parse dato - håndter forskellige formater
