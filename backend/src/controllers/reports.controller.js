@@ -50,3 +50,52 @@ exports.getVærdiReport = (req, res) => {
     }
   );
 };
+
+// Gem rapport i historik
+exports.saveReport = (req, res) => {
+  const { reportId, name, type, wineCount, totalValue, location } = req.body;
+  
+  if (!reportId || !name || !type) {
+    return res.status(400).json({ error: 'Manglende påkrævede felter' });
+  }
+  
+  db.run(
+    `INSERT OR REPLACE INTO reports (reportId, name, type, wineCount, totalValue, location, archived, created)
+     VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'))`,
+    [reportId, name, type, wineCount || 0, totalValue || 0, location || 'Lokal'],
+    function(err) {
+      if (err) {
+        console.error('Fejl ved gemning af rapport:', err);
+        return res.status(500).json({ error: 'Fejl ved gemning af rapport' });
+      }
+      res.json({ success: true, id: this.lastID });
+    }
+  );
+};
+
+// Hent rapport historik
+exports.getReportsHistory = (req, res) => {
+  db.all(
+    `SELECT 
+      reportId as id,
+      name,
+      type,
+      wineCount,
+      totalValue,
+      location,
+      archived,
+      created as date
+    FROM reports 
+    WHERE archived = 0
+    ORDER BY created DESC
+    LIMIT 100`,
+    [],
+    (err, rows) => {
+      if (err) {
+        console.error('Fejl ved hentning af rapport historik:', err);
+        return res.status(500).json({ error: 'Fejl ved hentning af rapport historik' });
+      }
+      res.json(rows);
+    }
+  );
+};
