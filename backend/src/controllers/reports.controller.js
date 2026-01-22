@@ -35,16 +35,19 @@ exports.getVærdiReport = (req, res) => {
 
       // Beregn total værdi
       const totalVærdi = rows.reduce((sum, row) => sum + (row.værdi || 0), 0);
-      const kroner = Math.floor(totalVærdi);
-      const øre = Math.round((totalVærdi - kroner) * 100);
+      
+      // Formatér i dansk format (punktum som tusindseperator, komma som decimalseparator)
+      // Eksempel: 137505.00 -> "137.505,00"
+      const parts = totalVærdi.toFixed(2).split('.');
+      const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      const decimalPart = parts[1] || '00';
+      const formateret = `${integerPart},${decimalPart}`;
 
       res.json({
         vine: rows,
         total: {
           værdi: totalVærdi,
-          kroner: kroner,
-          øre: øre,
-          formateret: `${kroner} kr. og ${øre} øre`
+          formateret: `${formateret} kr.`
         }
       });
     }
@@ -75,6 +78,8 @@ exports.saveReport = (req, res) => {
 
 // Hent rapport historik
 exports.getReportsHistory = (req, res) => {
+  // Hent alle rapporter (både arkiverede og ikke-arkiverede)
+  // Frontend filtrerer selv baseret på brugervalg
   db.all(
     `SELECT 
       reportId as id,
@@ -86,7 +91,6 @@ exports.getReportsHistory = (req, res) => {
       archived,
       created as date
     FROM reports 
-    WHERE archived = 0
     ORDER BY created DESC
     LIMIT 100`,
     [],
@@ -96,6 +100,31 @@ exports.getReportsHistory = (req, res) => {
         return res.status(500).json({ error: 'Fejl ved hentning af rapport historik' });
       }
       res.json(rows);
+    }
+  );
+};
+
+// Opdater rapport (fx arkivering)
+exports.updateReport = (req, res) => {
+  const { reportId } = req.params;
+  const { archived } = req.body;
+  
+  if (!reportId) {
+    return res.status(400).json({ error: 'Manglende reportId' });
+  }
+  
+  db.run(
+    `UPDATE reports SET archived = ? WHERE reportId = ?`,
+    [archived ? 1 : 0, reportId],
+    function(err) {
+      if (err) {
+        console.error('Fejl ved opdatering af rapport:', err);
+        return res.status(500).json({ error: 'Fejl ved opdatering af rapport' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Rapport ikke fundet' });
+      }
+      res.json({ success: true, changes: this.changes });
     }
   );
 };
