@@ -78,7 +78,6 @@ function startAutoUpdate() {
       checkForNewReport();
       
       // Opdater rapporter hvis vi er på rapporter siden
-      const currentPage = document.querySelector('.page.active')?.id;
       if (currentPage === 'rapporter') {
         loadReportsHistory();
       }
