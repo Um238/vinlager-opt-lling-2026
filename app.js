@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v46
+// VINLAGER OPTÆLLING 2026 - APP.JS v47
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v46 - Arkiveringsknap forbedret');
+console.log('Version: v47 - Arkiveringsknap oprettet direkte med createElement');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2035,21 +2035,72 @@ function renderReportsTable() {
   filtered.forEach(report => {
     const row = document.createElement('tr');
     row.style.borderBottom = '1px solid #eee';
-    row.innerHTML = `
-      <td style="padding: 0.75rem;">${report.date}</td>
-      <td style="padding: 0.75rem;">
-        ${report.name}
-        <span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-left: 0.5rem;">${report.location}</span>
-      </td>
-      <td style="padding: 0.75rem;">${report.wineCount} linjer — ${formatDanskPris(report.totalValue)} kr.</td>
-      <td style="padding: 0.75rem;">${report.wineCount}</td>
-      <td style="padding: 0.75rem;">${report.location}</td>
-      <td style="padding: 0.75rem;">
-        <button class="btn-secondary" onclick="viewReportPDF('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">Vis PDF</button>
-        <button class="btn-secondary" onclick="downloadReport('${report.id}')" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;">📥 Download</button>
-        ${(report.archived === undefined || !report.archived) ? `<button class="btn-secondary" onclick="archiveReport('${report.id}')" style="background: #f97316; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;">📦 Arkiver</button>` : `<button class="btn-secondary" onclick="unarchiveReport('${report.id}')" style="background: #4CAF50; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;">↩️ Gendan</button>`}
-      </td>
-    `;
+    
+    // Dato kolonne
+    const dateCell = document.createElement('td');
+    dateCell.style.padding = '0.75rem';
+    dateCell.textContent = report.date;
+    row.appendChild(dateCell);
+    
+    // Navn kolonne
+    const nameCell = document.createElement('td');
+    nameCell.style.padding = '0.75rem';
+    nameCell.innerHTML = `${report.name} <span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; margin-left: 0.5rem;">${report.location}</span>`;
+    row.appendChild(nameCell);
+    
+    // Værdi kolonne
+    const valueCell = document.createElement('td');
+    valueCell.style.padding = '0.75rem';
+    valueCell.textContent = `${report.wineCount} linjer — ${formatDanskPris(report.totalValue)} kr.`;
+    row.appendChild(valueCell);
+    
+    // Antal kolonne
+    const countCell = document.createElement('td');
+    countCell.style.padding = '0.75rem';
+    countCell.textContent = report.wineCount;
+    row.appendChild(countCell);
+    
+    // Lokation kolonne
+    const locationCell = document.createElement('td');
+    locationCell.style.padding = '0.75rem';
+    locationCell.textContent = report.location;
+    row.appendChild(locationCell);
+    
+    // Handlinger kolonne
+    const actionsCell = document.createElement('td');
+    actionsCell.style.padding = '0.75rem';
+    
+    // Vis PDF knap
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn-secondary';
+    viewBtn.textContent = 'Vis PDF';
+    viewBtn.style.cssText = 'margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;';
+    viewBtn.onclick = () => viewReportPDF(report.id);
+    actionsCell.appendChild(viewBtn);
+    
+    // Download knap
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'btn-secondary';
+    downloadBtn.textContent = '📥 Download';
+    downloadBtn.style.cssText = 'margin-right: 0.25rem; padding: 0.25rem 0.5rem; font-size: 0.9em;';
+    downloadBtn.onclick = () => downloadReport(report.id);
+    actionsCell.appendChild(downloadBtn);
+    
+    // Arkiver/Gendan knap - ALTID vis denne knap
+    const archiveBtn = document.createElement('button');
+    archiveBtn.className = 'btn-secondary';
+    if (report.archived === undefined || !report.archived) {
+      archiveBtn.textContent = '📦 Arkiver';
+      archiveBtn.style.cssText = 'background: #f97316; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;';
+      archiveBtn.onclick = () => archiveReport(report.id);
+    } else {
+      archiveBtn.textContent = '↩️ Gendan';
+      archiveBtn.style.cssText = 'background: #4CAF50; color: white; padding: 0.25rem 0.5rem; font-size: 0.9em; border: none; cursor: pointer;';
+      archiveBtn.onclick = () => unarchiveReport(report.id);
+    }
+    actionsCell.appendChild(archiveBtn);
+    
+    row.appendChild(actionsCell);
     tbody.appendChild(row);
   });
 }
