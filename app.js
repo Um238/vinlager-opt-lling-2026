@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v47
+// VINLAGER OPTÆLLING 2026 - APP.JS v48
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v47 - Arkiveringsknap oprettet direkte med createElement');
+console.log('Version: v48 - Tilføj Lokation kolonne til lager tabel');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -707,7 +707,7 @@ function renderLager() {
     console.warn('⚠️ allWines er tom - prøver at hente data igen...');
     const tbody = document.getElementById('lager-tbody');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
     }
     // Prøv at hente data igen
     loadWines().then(() => {
