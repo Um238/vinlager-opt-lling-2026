@@ -1876,6 +1876,7 @@ function renderReportsTable() {
   // Filtrer efter periode
   if (periodFilter !== 'all') {
     const now = new Date();
+    const originalCount = filtered.length;
     filtered = filtered.filter(r => {
       // Parse dato - håndter forskellige formater
       let reportDate;
@@ -1934,8 +1935,8 @@ function renderReportsTable() {
         const todayEnd = new Date(today);
         todayEnd.setHours(23, 59, 59, 999);
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
-        const isInRange = reportDay >= weekAgo && reportDay <= todayEnd;
-        console.log('Week filter:', { reportDate: r.date, reportDay, weekAgo, todayEnd, isInRange });
+        reportDay.setHours(0, 0, 0, 0); // Sæt til start af dagen for korrekt sammenligning
+        const isInRange = reportDay.getTime() >= weekAgo.getTime() && reportDay.getTime() <= todayEnd.getTime();
         return isInRange;
       } else if (periodFilter === 'thisMonth') {
         // Denne måned = nuværende kalendermåned
@@ -1954,8 +1955,9 @@ function renderReportsTable() {
         const reportDay = new Date(reportDate.getFullYear(), reportDate.getMonth(), reportDate.getDate());
         return reportDay >= lastMonthStart && reportDay <= lastMonthEnd;
       }
-      return true;
+      return false; // Hvis ingen match, returner false
     });
+    console.log(`Periode filter "${periodFilter}": ${originalCount} → ${filtered.length} rapporter`);
   }
   
   // Filtrer efter lokation
