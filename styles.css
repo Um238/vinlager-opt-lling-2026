@@ -238,7 +238,6 @@ table {
   border-collapse: collapse;
   margin-top: 1rem;
   font-size: 0.85rem;
-  table-layout: auto;
 }
 
 th, td {
@@ -247,96 +246,29 @@ th, td {
   border-bottom: 1px solid #eee;
 }
 
-/* Responsive kolonne bredder - bruger hele skærmen */
-#lager-table th:nth-child(1), /* VIN-ID */
-#lager-table td:nth-child(1) {
-  width: 7%;
-  white-space: nowrap;
-}
-
-#lager-table th:nth-child(2), /* Varenummer */
-#lager-table td:nth-child(2) {
-  width: 6%;
-  white-space: nowrap;
-}
-
-#lager-table th:nth-child(3), /* Navn */
-#lager-table td:nth-child(3) {
-  width: 12%;
-  white-space: normal;
-  word-wrap: break-word;
-}
-
-#lager-table th:nth-child(4), /* Type */
-#lager-table td:nth-child(4) {
-  width: 6%;
-  white-space: normal;
-  word-wrap: break-word;
-}
-
-#lager-table th:nth-child(5), /* Land */
-#lager-table td:nth-child(5) {
-  width: 7%;
-  white-space: normal;
-  word-wrap: break-word;
-}
-
-#lager-table th:nth-child(6), /* Region */
-#lager-table td:nth-child(6) {
-  width: 8%;
-  white-space: normal;
-  word-wrap: break-word;
-}
-
+/* Specifik styling for lager tabel kolonner - ingen width constraints der kan forårsage misalignment */
 #lager-table th:nth-child(7), /* Årgang */
 #lager-table td:nth-child(7) {
-  width: 5%;
-  white-space: nowrap;
   text-align: center;
-}
-
-#lager-table th:nth-child(8), /* Lokation */
-#lager-table td:nth-child(8) {
-  width: 8%;
-  white-space: nowrap;
 }
 
 #lager-table th:nth-child(9), /* Reol */
-#lager-table td:nth-child(9) {
-  width: 4%;
-  white-space: nowrap;
-  text-align: center;
-}
-
+#lager-table td:nth-child(9),
 #lager-table th:nth-child(10), /* Hylde */
 #lager-table td:nth-child(10) {
-  width: 4%;
-  white-space: nowrap;
   text-align: center;
 }
 
-#lager-table th:nth-child(11), /* Antal */
-#lager-table td:nth-child(11) {
-  width: 5%;
-  white-space: nowrap;
-}
-
-#lager-table th:nth-child(12), /* Min. Antal */
-#lager-table td:nth-child(12) {
-  width: 6%;
-  white-space: nowrap;
-}
-
-#lager-table th:nth-child(13), /* Indkøbspris */
-#lager-table td:nth-child(13) {
-  width: 7%;
-  white-space: nowrap;
-}
-
-#lager-table th:nth-child(14), /* Billede */
-#lager-table td:nth-child(14) {
-  width: 8%;
-  white-space: nowrap;
+#lager-table th:nth-child(3), /* Navn */
+#lager-table td:nth-child(3),
+#lager-table th:nth-child(4), /* Type */
+#lager-table td:nth-child(4),
+#lager-table th:nth-child(5), /* Land */
+#lager-table td:nth-child(5),
+#lager-table th:nth-child(6), /* Region */
+#lager-table td:nth-child(6) {
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 th {
