@@ -69,11 +69,21 @@ function parseExcel(filePath) {
   try {
     // Prøv først at læse buffer (virker bedre med uploadede filer)
     const fileBuffer = fs.readFileSync(filePath);
-    workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    // Brug codepage 65001 (UTF-8) for korrekt encoding af æ, ø, å
+    workbook = XLSX.read(fileBuffer, { 
+      type: 'buffer',
+      codepage: 65001,
+      cellText: false,
+      cellDates: true
+    });
   } catch (err) {
     // Hvis buffer fejler, prøv at læse som fil
     try {
-      workbook = XLSX.readFile(filePath);
+      workbook = XLSX.readFile(filePath, {
+        codepage: 65001,
+        cellText: false,
+        cellDates: true
+      });
     } catch (fileErr) {
       throw new Error(`Kan ikke læse Excel fil: ${err.message || fileErr.message}`);
     }
@@ -90,15 +100,20 @@ function parseExcel(filePath) {
     throw new Error('Excel arket er tomt');
   }
   
-  const data = XLSX.utils.sheet_to_json(worksheet);
+  // Brug sheet_to_json med raw: false for at få formaterede værdier
+  const data = XLSX.utils.sheet_to_json(worksheet, {
+    raw: false, // Få formaterede værdier (ikke rå tal)
+    defval: '' // Default værdi for tomme celler
+  });
   
   if (!data || data.length === 0) {
     throw new Error('Excel filen indeholder ingen data (kun headers?)');
   }
 
-  // Map til lowercase headers
+  // Map til lowercase headers (case-insensitive)
   const headerMap = {
     'vinid': 'vinId',
+    'vin-id': 'vinId',
     'varenummer': 'varenummer',
     'navn': 'navn',
     'type': 'type',
@@ -107,14 +122,17 @@ function parseExcel(filePath) {
     'region': 'region',
     'drue': 'drue',
     'årgang': 'årgang',
+    'ar': 'årgang',
     'reol': 'reol',
     'hylde': 'hylde',
     'lokation': 'lokation',
     'location': 'lokation',
     'antal': 'antal',
     'minantal': 'minAntal',
+    'min antal': 'minAntal',
     'minimum': 'minAntal',
     'indkøbspris': 'indkøbspris',
+    'indkøbs pris': 'indkøbspris',
     'pris': 'indkøbspris',
     'billede': 'billede'
   };
@@ -122,9 +140,16 @@ function parseExcel(filePath) {
   return data.map(row => {
     const mappedRow = {};
     Object.keys(row).forEach(key => {
-      const lowerKey = key.toLowerCase().trim();
+      // Fjern whitespace og konverter til lowercase
+      const lowerKey = key.toLowerCase().trim().replace(/\s+/g, '');
       const mappedKey = headerMap[lowerKey] || lowerKey;
-      mappedRow[mappedKey] = row[key];
+      // Bevar original værdi, men map key korrekt
+      let value = row[key];
+      // Hvis værdien er et tal, konverter det
+      if (typeof value === 'number') {
+        value = value.toString();
+      }
+      mappedRow[mappedKey] = value;
     });
     return mappedRow;
   }).filter(row => row.vinId || row.navn);
@@ -513,18 +538,96 @@ exports.exportExcel = async (req, res) => {
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Vinlager');
 
-    // Generer Excel buffer
-    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    // Generer Excel buffer med UTF-8 encoding
+    const excelBuffer = XLSX.write(workbook, { 
+      type: 'buffer', 
+      bookType: 'xlsx',
+      codepage: 65001 // UTF-8 encoding for korrekt håndtering af æ, ø, å
+    });
 
     // Send som download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="vinlager_export.xlsx"');
+    res.setHeader('Content-Disposition', 'attachment; filename*=UTF-8\'\'vinlager_export.xlsx');
     res.send(excelBuffer);
 
   } catch (error) {
     console.error('Excel export fejl:', error);
     res.status(500).json({ 
       error: error.message || 'Ukendt fejl ved Excel export',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// Download Excel skabelon (tom skabelon med korrekt kolonne rækkefølge)
+exports.downloadTemplate = async (req, res) => {
+  try {
+    // Opret tom Excel skabelon med korrekt kolonne rækkefølge
+    const headers = [
+      'vinId',
+      'varenummer',
+      'navn',
+      'type',
+      'kategori',
+      'land',
+      'region',
+      'drue',
+      'årgang',
+      'lokation',
+      'reol',
+      'hylde',
+      'antal',
+      'minAntal',
+      'indkøbspris'
+    ];
+
+    // Opret tom data array med kun headers
+    const templateData = [headers];
+
+    // Opret Excel workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Konverter til Excel format
+    const worksheet = XLSX.utils.aoa_to_sheet(templateData);
+    
+    // Sæt kolonne bredder
+    worksheet['!cols'] = [
+      { wch: 12 }, // vinId
+      { wch: 12 }, // varenummer
+      { wch: 35 }, // navn
+      { wch: 15 }, // type
+      { wch: 15 }, // kategori
+      { wch: 15 }, // land
+      { wch: 20 }, // region
+      { wch: 20 }, // drue
+      { wch: 8 },  // årgang
+      { wch: 15 }, // lokation
+      { wch: 6 },  // reol
+      { wch: 6 },  // hylde
+      { wch: 8 },  // antal
+      { wch: 8 },  // minAntal
+      { wch: 12 }  // indkøbspris
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Vinlager');
+
+    // Generer Excel buffer med UTF-8 encoding
+    const excelBuffer = XLSX.write(workbook, { 
+      type: 'buffer', 
+      bookType: 'xlsx',
+      cellStyles: true,
+      codepage: 65001 // UTF-8 encoding for korrekt håndtering af æ, ø, å
+    });
+
+    // Send som download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename*=UTF-8\'\'vinlager_skabelon.xlsx');
+    res.send(excelBuffer);
+
+  } catch (error) {
+    console.error('Template download fejl:', error);
+    res.status(500).json({ 
+      error: error.message || 'Ukendt fejl ved download af skabelon',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
@@ -594,9 +697,9 @@ exports.exportCSV = async (req, res) => {
       csv += values.join(';') + '\n';
     });
 
-    // Send som download
+    // Send som download med UTF-8 BOM for korrekt encoding i Excel
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="vinlager_export.csv"');
+    res.setHeader('Content-Disposition', 'attachment; filename*=UTF-8\'\'vinlager_export.csv');
     res.send('\ufeff' + csv); // BOM for UTF-8 i Excel
 
   } catch (error) {
