@@ -1348,6 +1348,36 @@ function setupFileInput() {
   });
 }
 
+// Download Excel skabelon
+async function downloadTemplate() {
+  try {
+    const config = getConfig();
+    const response = await fetch(`${config.API_URL}/api/import/template`, {
+      method: 'GET'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP fejl: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vinlager_skabelon.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    // Vis success besked
+    showSuccess('Excel skabelon downloadet! Filen hedder: vinlager_skabelon.xlsx');
+  } catch (error) {
+    console.error('Fejl ved download af skabelon:', error);
+    showError('Kunne ikke downloade skabelon: ' + error.message);
+  }
+}
+
 async function doImport() {
   const fileInput = document.getElementById('file-input');
   const file = fileInput.files[0];
