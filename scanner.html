@@ -799,8 +799,10 @@
             locationWineCount++;
             
             x = 14;
+            // Tilføj prik (•) foran VIN-ID for at markere optalte vine
+            const vinIdMarked = '• ' + (wine.vinId || '');
             const row = [
-              wine.vinId || '',
+              vinIdMarked,
               wine.navn || 'Ukendt vare',
               wine.type || '',
               wine.antal || 0,

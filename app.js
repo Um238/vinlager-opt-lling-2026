@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v55
+// VINLAGER OPTÆLLING 2026 - APP.JS v56
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v55 - Fiks rapport gruppering og encoding problemer');
+console.log('Version: v56 - Fiks dashboard opdatering, labels, rapporter markering');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -536,7 +536,15 @@ function updateDashboard() {
   const statVærdi = document.getElementById('stat-værdi');
   
   if (statAntVine) statAntVine.textContent = antVine;
-  if (statLavt) statLavt.textContent = lavtLager;
+  if (statLavt) {
+    statLavt.textContent = lavtLager;
+    // Opdater farve baseret på antal
+    if (lavtLager > 0) {
+      statLavt.classList.add('warning');
+    } else {
+      statLavt.classList.remove('warning');
+    }
+  }
   if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
   
   // QR-kode genereres når modal åbnes
@@ -1527,8 +1535,8 @@ async function generateLabels() {
     label.innerHTML = `
       <div class="label-info">
         <strong>${wine.navn || ''}</strong>
-        <div>Varenr: ${wine.varenummer || ''}</div>
         <div>${wine.land || ''} ${wine.årgang || ''}</div>
+        <div><strong>Lokation:</strong> ${wine.lokation || 'Ukendt'}</div>
         <div>Reol ${wine.reol || ''} - Hylde ${wine.hylde || ''}</div>
       </div>
       <div class="label-qr" id="${qrId}"></div>
@@ -1723,6 +1731,11 @@ function checkForNewReport() {
   // Dette sikrer at rapporter fra mobil vises på PC
   if (typeof loadReportsHistory === 'function') {
     loadReportsHistory();
+  }
+  
+  // OPDATER OGSÅ LAGER DATA - så dashboard opdateres efter scanning
+  if (typeof loadWines === 'function') {
+    loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
   }
   
   // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
@@ -2274,8 +2287,10 @@ async function generateFullReportPDF(report) {
         locationWineCount++;
         
         x = 14;
+        // Tilføj prik (•) foran VIN-ID for at markere optalte vine
+        const vinIdMarked = '• ' + (wine.vinId || '');
         const row = [
-          wine.vinId || '',
+          vinIdMarked,
           wine.navn || '',
           wine.type || '',
           wine.land || '',
@@ -2495,8 +2510,10 @@ async function generateFullReportPDFForDownload(report) {
         locationWineCount++;
         
         x = 14;
+        // Tilføj prik (•) foran VIN-ID for at markere optalte vine
+        const vinIdMarked = '• ' + (wine.vinId || '');
         const row = [
-          wine.vinId || '',
+          vinIdMarked,
           wine.navn || '',
           wine.type || '',
           wine.land || '',
