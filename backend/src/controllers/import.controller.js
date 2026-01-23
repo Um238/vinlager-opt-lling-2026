@@ -559,10 +559,91 @@ exports.exportExcel = async (req, res) => {
   }
 };
 
-// Download Excel skabelon (tom skabelon med korrekt kolonne rækkefølge)
+// Download Excel skabelon (med eksempeldata - realistiske vine)
 exports.downloadTemplate = async (req, res) => {
   try {
-    // Opret tom Excel skabelon med korrekt kolonne rækkefølge
+    // Realistiske vine med rigtige navne, lande, regioner, drue sorter, årgange og priser
+    const wines = [
+      // Frankrig - Bordeaux
+      { navn: 'Château Margaux', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 650 },
+      { navn: 'Château Latour', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 680 },
+      { navn: 'Château Mouton Rothschild', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2019, pris: 700 },
+      { navn: 'Château Lafite Rothschild', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 690 },
+      { navn: 'Château Haut-Brion', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Merlot', årgang: 2017, pris: 670 },
+      { navn: 'Château Cheval Blanc', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Merlot', årgang: 2018, pris: 650 },
+      { navn: 'Château Pétrus', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Merlot', årgang: 2019, pris: 700 },
+      { navn: 'Château d\'Yquem', type: 'Dessertvin', kategori: 'Dessertvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Sémillon', årgang: 2017, pris: 450 },
+      { navn: 'Château Palmer', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 320 },
+      { navn: 'Château Cos d\'Estournel', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bordeaux', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 280 },
+      // Frankrig - Burgundy
+      { navn: 'Domaine de la Romanée-Conti', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Pinot Noir', årgang: 2018, pris: 680 },
+      { navn: 'Domaine Leroy', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Pinot Noir', årgang: 2019, pris: 550 },
+      { navn: 'Domaine Armand Rousseau', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Pinot Noir', årgang: 2018, pris: 420 },
+      { navn: 'Domaine Comte de Vogüé', type: 'Rødvin', kategori: 'Rødvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Pinot Noir', årgang: 2017, pris: 480 },
+      { navn: 'Domaine Leflaive', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Chardonnay', årgang: 2019, pris: 380 },
+      { navn: 'Domaine Coche-Dury', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Frankrig', region: 'Bourgogne', drue: 'Chardonnay', årgang: 2018, pris: 450 },
+      // Frankrig - Champagne
+      { navn: 'Dom Pérignon', type: 'Mousserende', kategori: 'Mousserende', land: 'Frankrig', region: 'Champagne', drue: 'Chardonnay', årgang: 2015, pris: 850 },
+      { navn: 'Krug Grande Cuvée', type: 'Mousserende', kategori: 'Mousserende', land: 'Frankrig', region: 'Champagne', drue: 'Chardonnay', årgang: 2016, pris: 420 },
+      { navn: 'Veuve Clicquot', type: 'Mousserende', kategori: 'Mousserende', land: 'Frankrig', region: 'Champagne', drue: 'Pinot Noir', årgang: 2017, pris: 380 },
+      { navn: 'Moët & Chandon', type: 'Mousserende', kategori: 'Mousserende', land: 'Frankrig', region: 'Champagne', drue: 'Chardonnay', årgang: 2018, pris: 320 },
+      { navn: 'Laurent-Perrier', type: 'Mousserende', kategori: 'Mousserende', land: 'Frankrig', region: 'Champagne', drue: 'Chardonnay', årgang: 2019, pris: 280 },
+      // Italien - Toscana
+      { navn: 'Sassicaia', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 450 },
+      { navn: 'Ornellaia', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Merlot', årgang: 2017, pris: 420 },
+      { navn: 'Tignanello', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Sangiovese', årgang: 2019, pris: 380 },
+      { navn: 'Brunello di Montalcino', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Sangiovese', årgang: 2016, pris: 320 },
+      { navn: 'Chianti Classico', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Sangiovese', årgang: 2018, pris: 180 },
+      { navn: 'Super Tuscan', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Toscana', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 250 },
+      // Italien - Piemonte
+      { navn: 'Barolo', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Piemonte', drue: 'Nebbiolo', årgang: 2016, pris: 320 },
+      { navn: 'Barbaresco', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Piemonte', drue: 'Nebbiolo', årgang: 2017, pris: 280 },
+      { navn: 'Barbera d\'Asti', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Piemonte', drue: 'Barbera', årgang: 2018, pris: 120 },
+      { navn: 'Gaja', type: 'Rødvin', kategori: 'Rødvin', land: 'Italien', region: 'Piemonte', drue: 'Nebbiolo', årgang: 2018, pris: 450 },
+      // Spanien
+      { navn: 'Vega Sicilia', type: 'Rødvin', kategori: 'Rødvin', land: 'Spanien', region: 'Ribera del Duero', drue: 'Tempranillo', årgang: 2016, pris: 380 },
+      { navn: 'Marqués de Riscal', type: 'Rødvin', kategori: 'Rødvin', land: 'Spanien', region: 'Rioja', drue: 'Tempranillo', årgang: 2017, pris: 180 },
+      { navn: 'La Rioja Alta', type: 'Rødvin', kategori: 'Rødvin', land: 'Spanien', region: 'Rioja', drue: 'Tempranillo', årgang: 2015, pris: 220 },
+      { navn: 'Pesquera', type: 'Rødvin', kategori: 'Rødvin', land: 'Spanien', region: 'Ribera del Duero', drue: 'Tempranillo', årgang: 2018, pris: 150 },
+      { navn: 'Albariño', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Spanien', region: 'Rías Baixas', drue: 'Albariño', årgang: 2019, pris: 120 },
+      // Tyskland
+      { navn: 'Riesling Trocken', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Tyskland', region: 'Mosel', drue: 'Riesling', årgang: 2019, pris: 95 },
+      { navn: 'Riesling Spätlese', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Tyskland', region: 'Rheingau', drue: 'Riesling', årgang: 2018, pris: 120 },
+      { navn: 'Gewürztraminer', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Tyskland', region: 'Pfalz', drue: 'Gewürztraminer', årgang: 2019, pris: 85 },
+      // Portugal
+      { navn: 'Porto Vintage', type: 'Dessertvin', kategori: 'Dessertvin', land: 'Portugal', region: 'Douro', drue: 'Touriga Nacional', årgang: 2017, pris: 280 },
+      { navn: 'Graham\'s Port', type: 'Dessertvin', kategori: 'Dessertvin', land: 'Portugal', region: 'Douro', drue: 'Touriga Nacional', årgang: 2016, pris: 220 },
+      // USA - California
+      { navn: 'Opus One', type: 'Rødvin', kategori: 'Rødvin', land: 'USA', region: 'Napa Valley', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 450 },
+      { navn: 'Screaming Eagle', type: 'Rødvin', kategori: 'Rødvin', land: 'USA', region: 'Napa Valley', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 650 },
+      { navn: 'Caymus', type: 'Rødvin', kategori: 'Rødvin', land: 'USA', region: 'Napa Valley', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 320 },
+      { navn: 'Silver Oak', type: 'Rødvin', kategori: 'Rødvin', land: 'USA', region: 'Napa Valley', drue: 'Cabernet Sauvignon', årgang: 2016, pris: 280 },
+      { navn: 'Chardonnay Napa', type: 'Hvidvin', kategori: 'Hvidvin', land: 'USA', region: 'Napa Valley', drue: 'Chardonnay', årgang: 2019, pris: 180 },
+      // Australien
+      { navn: 'Penfolds Grange', type: 'Rødvin', kategori: 'Rødvin', land: 'Australien', region: 'South Australia', drue: 'Shiraz', årgang: 2016, pris: 550 },
+      { navn: 'Henschke Hill of Grace', type: 'Rødvin', kategori: 'Rødvin', land: 'Australien', region: 'South Australia', drue: 'Shiraz', årgang: 2017, pris: 480 },
+      { navn: 'Shiraz Barossa', type: 'Rødvin', kategori: 'Rødvin', land: 'Australien', region: 'Barossa Valley', drue: 'Shiraz', årgang: 2018, pris: 150 },
+      { navn: 'Chardonnay Yarra Valley', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Australien', region: 'Yarra Valley', drue: 'Chardonnay', årgang: 2019, pris: 120 },
+      // Chile
+      { navn: 'Almaviva', type: 'Rødvin', kategori: 'Rødvin', land: 'Chile', region: 'Maipo Valley', drue: 'Cabernet Sauvignon', årgang: 2017, pris: 280 },
+      { navn: 'Don Melchor', type: 'Rødvin', kategori: 'Rødvin', land: 'Chile', region: 'Maipo Valley', drue: 'Cabernet Sauvignon', årgang: 2018, pris: 220 },
+      { navn: 'Carmenère', type: 'Rødvin', kategori: 'Rødvin', land: 'Chile', region: 'Colchagua Valley', drue: 'Carmenère', årgang: 2017, pris: 95 },
+      // Argentina
+      { navn: 'Catena Zapata', type: 'Rødvin', kategori: 'Rødvin', land: 'Argentina', region: 'Mendoza', drue: 'Malbec', årgang: 2018, pris: 180 },
+      { navn: 'Malbec Reserva', type: 'Rødvin', kategori: 'Rødvin', land: 'Argentina', region: 'Mendoza', drue: 'Malbec', årgang: 2017, pris: 120 },
+      // Sydafrika
+      { navn: 'Kanonkop Pinotage', type: 'Rødvin', kategori: 'Rødvin', land: 'Sydafrika', region: 'Stellenbosch', drue: 'Pinotage', årgang: 2018, pris: 150 },
+      { navn: 'Chenin Blanc', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Sydafrika', region: 'Stellenbosch', drue: 'Chenin Blanc', årgang: 2019, pris: 95 },
+      // Danmark
+      { navn: 'Dansk Riesling', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Danmark', region: 'Sjælland', drue: 'Riesling', årgang: 2019, pris: 180 },
+      { navn: 'Dansk Solaris', type: 'Hvidvin', kategori: 'Hvidvin', land: 'Danmark', region: 'Fyn', drue: 'Solaris', årgang: 2019, pris: 150 },
+      { navn: 'Dansk Rondo', type: 'Rødvin', kategori: 'Rødvin', land: 'Danmark', region: 'Sjælland', drue: 'Rondo', årgang: 2018, pris: 120 },
+    ];
+
+    // Lokationer
+    const locations = ['Restaurant 1', 'Restaurant 2', 'Vinlager 1', 'Vinlager 2', 'Vinkøler 1', 'Vinkøler 2'];
+
+    // Generer data med headers
     const headers = [
       'vinId',
       'varenummer',
@@ -581,8 +662,65 @@ exports.downloadTemplate = async (req, res) => {
       'indkøbspris'
     ];
 
-    // Opret tom data array med kun headers
     const templateData = [headers];
+    
+    let vinIdCounter = 1;
+    let varenummerCounter = 1;
+
+    // Fordel vine på forskellige lokationer
+    wines.forEach((wine, index) => {
+      const location = locations[index % locations.length];
+      const reol = String.fromCharCode(65 + (index % 6)); // A, B, C, D, E, F
+      const hylde = (index % 4) + 1; // 1, 2, 3, 4
+      const antal = 24 + Math.floor(Math.random() * 48); // 24-72 flasker
+      
+      templateData.push([
+        `VIN-${String(vinIdCounter).padStart(4, '0')}`,
+        `W${String(varenummerCounter).padStart(3, '0')}`,
+        wine.navn,
+        wine.type,
+        wine.kategori,
+        wine.land,
+        wine.region,
+        wine.drue,
+        wine.årgang,
+        location,
+        reol,
+        hylde,
+        antal,
+        24,
+        wine.pris.toFixed(2).replace('.', ',')
+      ]);
+      
+      vinIdCounter++;
+      varenummerCounter++;
+      
+      // Nogle vine skal have flere lokationer (ca. 20% af vine)
+      if (Math.random() < 0.2 && index < wines.length - 5) {
+        const secondLocation = locations[(index + 3) % locations.length];
+        const secondReol = String.fromCharCode(65 + ((index + 2) % 6));
+        const secondHylde = ((index + 1) % 4) + 1;
+        const secondAntal = 24 + Math.floor(Math.random() * 24);
+        
+        templateData.push([
+          `VIN-${String(vinIdCounter - 1).padStart(4, '0')}`, // Samme vinId
+          `W${String(varenummerCounter - 1).padStart(3, '0')}`, // Samme varenummer
+          wine.navn,
+          wine.type,
+          wine.kategori,
+          wine.land,
+          wine.region,
+          wine.drue,
+          wine.årgang,
+          secondLocation,
+          secondReol,
+          secondHylde,
+          secondAntal,
+          24,
+          wine.pris.toFixed(2).replace('.', ',')
+        ]);
+      }
+    });
 
     // Opret Excel workbook
     const workbook = XLSX.utils.book_new();
