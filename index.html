@@ -131,6 +131,9 @@
       <div class="card">
         <h2>Lageroversigt</h2>
         <div class="filter-bar">
+          <select id="filter-lokation">
+            <option value="">Alle lokationer</option>
+          </select>
           <select id="filter-reol">
             <option value="">Alle reoler</option>
           </select>
@@ -259,6 +262,9 @@
       <div class="card">
         <h2 class="sticky-header">Print Labels</h2>
         <div class="filter-bar">
+          <select id="label-lokation">
+            <option value="">Alle lokationer</option>
+          </select>
           <select id="label-reol">
             <option value="">Alle reoler</option>
           </select>
@@ -537,7 +543,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=55"></script>
+      <script src="app.js?v=56"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

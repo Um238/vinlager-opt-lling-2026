@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v53
+// VINLAGER OPTÆLLING 2026 - APP.JS v54
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v53 - Grupper rapporter efter lokation med separate totaler');
+console.log('Version: v54 - Tilføj Lokation dropdown til Labels og Lageroversigt');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -664,13 +664,25 @@ document.addEventListener('click', function(event) {
 
 // Lager visning
 function populateFilters() {
+  const lokationer = [...new Set(allWines.map(w => w.lokation).filter(Boolean))].sort();
   const reoler = [...new Set(allWines.map(w => w.reol).filter(Boolean))].sort();
   const hylder = [...new Set(allWines.map(w => w.hylde).filter(Boolean))].sort();
 
+  const lokationSelect = document.getElementById('filter-lokation');
   const reolSelect = document.getElementById('filter-reol');
   const hyldeSelect = document.getElementById('filter-hylde');
+  const labelLokation = document.getElementById('label-lokation');
   const labelReol = document.getElementById('label-reol');
   const labelHylde = document.getElementById('label-hylde');
+
+  [lokationSelect, labelLokation].forEach(select => {
+    if (select) {
+      select.innerHTML = '<option value="">Alle lokationer</option>';
+      lokationer.forEach(l => {
+        select.innerHTML += `<option value="${l}">${l}</option>`;
+      });
+    }
+  });
 
   [reolSelect, labelReol].forEach(select => {
     if (select) {
@@ -696,6 +708,7 @@ function applyFilter() {
 }
 
 function clearFilter() {
+  document.getElementById('filter-lokation').value = '';
   document.getElementById('filter-reol').value = '';
   document.getElementById('filter-hylde').value = '';
   renderLager();
@@ -717,11 +730,15 @@ function renderLager() {
     return;
   }
   
+  const lokationFilter = document.getElementById('filter-lokation').value;
   const reolFilter = document.getElementById('filter-reol').value;
   const hyldeFilter = document.getElementById('filter-hylde').value;
 
   let filtered = allWines;
 
+  if (lokationFilter) {
+    filtered = filtered.filter(w => w.lokation === lokationFilter);
+  }
   if (reolFilter) {
     filtered = filtered.filter(w => w.reol === reolFilter);
   }
@@ -1484,11 +1501,15 @@ function tryCanvasGeneration(container, text, qrLib) {
 }
 
 async function generateLabels() {
+  const lokationFilter = document.getElementById('label-lokation').value;
   const reolFilter = document.getElementById('label-reol').value;
   const hyldeFilter = document.getElementById('label-hylde').value;
 
   let filtered = allWines;
 
+  if (lokationFilter) {
+    filtered = filtered.filter(w => w.lokation === lokationFilter);
+  }
   if (reolFilter) {
     filtered = filtered.filter(w => w.reol === reolFilter);
   }
@@ -2184,12 +2205,18 @@ async function generateFullReportPDF(report) {
     // Grupper vine efter lokation
     const winesByLocation = {};
     wines.forEach(wine => {
-      const location = wine.lokation || 'Ukendt lokation';
+      // Tjek både 'lokation' og 'location' (forskellige API'er kan bruge forskellige navne)
+      const location = wine.lokation || wine.location || 'Ukendt lokation';
       if (!winesByLocation[location]) {
         winesByLocation[location] = [];
       }
       winesByLocation[location].push(wine);
     });
+    
+    console.log('📍 Grupperet vine efter lokation:', Object.keys(winesByLocation).map(loc => ({
+      lokation: loc,
+      antal: winesByLocation[loc].length
+    })));
     
     const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
@@ -2398,12 +2425,18 @@ async function generateFullReportPDFForDownload(report) {
     // Grupper vine efter lokation
     const winesByLocation = {};
     wines.forEach(wine => {
-      const location = wine.lokation || 'Ukendt lokation';
+      // Tjek både 'lokation' og 'location' (forskellige API'er kan bruge forskellige navne)
+      const location = wine.lokation || wine.location || 'Ukendt lokation';
       if (!winesByLocation[location]) {
         winesByLocation[location] = [];
       }
       winesByLocation[location].push(wine);
     });
+    
+    console.log('📍 Grupperet vine efter lokation:', Object.keys(winesByLocation).map(loc => ({
+      lokation: loc,
+      antal: winesByLocation[loc].length
+    })));
     
     const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
