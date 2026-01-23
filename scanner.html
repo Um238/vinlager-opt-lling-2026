@@ -724,8 +724,6 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
-        const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
-        
         let y = 20;
         doc.setFontSize(16);
         doc.text('Optællingsrapport', 14, y);
@@ -733,70 +731,128 @@
         
         doc.setFontSize(10);
         doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
-        y += 6;
-        doc.text('Lokation: ' + locationName, 14, y);
-        y += 8;
+        y += 10;
         
-        const headers = ['VIN-ID', 'Navn', 'Type', 'Lokation', 'Antal', 'Min', 'Pris'];
-        const colWidths = [30, 50, 20, 25, 15, 15, 25];
-        let x = 14;
-        
-        doc.setFontSize(8);
-        headers.forEach((header, i) => {
-          doc.text(header, x, y);
-          x += colWidths[i];
-        });
-        y += 6;
-        
-        let totalVærdi = 0;
-        
+        // Grupper vine efter lokation
+        const winesByLocation = {};
         wines.forEach(wine => {
-          if (y > 280) {
+          const location = wine.locationName || 'Ikke valgt';
+          if (!winesByLocation[location]) {
+            winesByLocation[location] = [];
+          }
+          winesByLocation[location].push(wine);
+        });
+        
+        const headers = ['VIN-ID', 'Navn', 'Type', 'Antal', 'Min', 'Pris'];
+        const colWidths = [30, 50, 20, 15, 15, 25];
+        
+        let grandTotalVærdi = 0;
+        let grandTotalWineCount = 0;
+        const locationTotals = {};
+        
+        // Gennemgå hver lokation
+        Object.keys(winesByLocation).sort().forEach((location) => {
+          const locationWines = winesByLocation[location];
+          let locationTotalVærdi = 0;
+          let locationWineCount = 0;
+          
+          // Tjek om vi skal tilføje ny side
+          if (y > 250) {
             doc.addPage();
             y = 20;
-            x = 14;
-            headers.forEach((header, i) => {
-              doc.text(header, x, y);
-              x += colWidths[i];
-            });
-            y += 6;
           }
           
-          const pris = wine.indkøbspris || 0;
-          const værdi = pris * (wine.antal || 0);
-          totalVærdi += værdi;
+          // Lokation header
+          doc.setFontSize(12);
+          doc.setFont(undefined, 'bold');
+          doc.text(`📍 ${location}`, 14, y);
+          y += 8;
           
-          x = 14;
-          const row = [
-            wine.vinId || '',
-            wine.navn || 'Ukendt vare',
-            wine.type || '',
-            wine.locationName || locationName || 'Ikke valgt',
-            wine.antal || 0,
-            wine.minAntal || 24,
-            pris.toFixed(2)
-          ];
-          
-          row.forEach((cell, i) => {
-            doc.text(String(cell).substring(0, 20), x, y);
+          // Tabel header
+          doc.setFontSize(8);
+          doc.setFont(undefined, 'normal');
+          let x = 14;
+          headers.forEach((header, i) => {
+            doc.text(header, x, y);
             x += colWidths[i];
           });
           y += 6;
+          
+          // Vine i denne lokation
+          locationWines.forEach(wine => {
+            if (y > 280) {
+              doc.addPage();
+              y = 20;
+              // Genprint header
+              x = 14;
+              doc.setFontSize(8);
+              headers.forEach((header, i) => {
+                doc.text(header, x, y);
+                x += colWidths[i];
+              });
+              y += 6;
+            }
+            
+            const pris = wine.indkøbspris || 0;
+            const værdi = pris * (wine.antal || 0);
+            locationTotalVærdi += værdi;
+            locationWineCount++;
+            
+            x = 14;
+            const row = [
+              wine.vinId || '',
+              wine.navn || 'Ukendt vare',
+              wine.type || '',
+              wine.antal || 0,
+              wine.minAntal || 24,
+              pris.toFixed(2)
+            ];
+            
+            row.forEach((cell, i) => {
+              doc.text(String(cell).substring(0, 20), x, y);
+              x += colWidths[i];
+            });
+            y += 6;
+          });
+          
+          // Lokation total
+          y += 3;
+          doc.setFontSize(9);
+          doc.setFont(undefined, 'bold');
+          doc.text(`Total ${location}: ${locationWineCount} vine, ${formatDanskPris(locationTotalVærdi)} kr.`, 14, y);
+          y += 8;
+          
+          locationTotals[location] = {
+            værdi: locationTotalVærdi,
+            antal: locationWineCount
+          };
+          grandTotalVærdi += locationTotalVærdi;
+          grandTotalWineCount += locationWineCount;
         });
         
+        // Grand total
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
         y += 5;
-        doc.setFontSize(10);
-        doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
-        y += 6;
-        doc.text(`Antal scannet: ${wines.length} vine`, 14, y);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('═══════════════════════════════════════', 14, y);
+        y += 7;
+        doc.text(`SAMLET TOTAL: ${grandTotalWineCount} vine, ${formatDanskPris(grandTotalVærdi)} kr.`, 14, y);
+        y += 7;
+        doc.text('═══════════════════════════════════════', 14, y);
+        
+        const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer';
         
         const reportData = {
           reportId: Date.now().toString(),
           date: new Date().toLocaleString('da-DK'),
           name: 'OPTÆLLING-' + Date.now().toString().slice(-6),
           type: 'lager',
-          wineCount: wines.length,
-          totalValue: totalVærdi,
+          wineCount: grandTotalWineCount,
+          totalValue: grandTotalVærdi,
           location: locationName,
           archived: false
         };
@@ -833,7 +889,10 @@
         showStatus('✅ Rapport genereret!', 'success');
         
         setTimeout(() => {
-          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} scannet vine.\nLokation: ${locationName}\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.`);
+          const locationSummary = Object.keys(locationTotals).map(loc => 
+            `${loc}: ${locationTotals[loc].antal} vine, ${formatDanskPris(locationTotals[loc].værdi)} kr.`
+          ).join('\n');
+          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${grandTotalWineCount} scannet vine fra ${Object.keys(winesByLocation).length} lokation(er).\n\n${locationSummary}\n\nSAMLET TOTAL: ${formatDanskPris(grandTotalVærdi)} kr.`);
           window.location.href = 'index.html';
         }, 1000);
         

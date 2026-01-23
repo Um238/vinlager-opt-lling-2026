@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v52
+// VINLAGER OPTÆLLING 2026 - APP.JS v53
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v52 - Fjern kun Kategori kolonne, beholde Region');
+console.log('Version: v53 - Grupper rapporter efter lokation med separate totaler');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2179,68 +2179,125 @@ async function generateFullReportPDF(report) {
     
     doc.setFontSize(10);
     doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
-    y += 7;
-    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
     y += 10;
+    
+    // Grupper vine efter lokation
+    const winesByLocation = {};
+    wines.forEach(wine => {
+      const location = wine.lokation || 'Ukendt lokation';
+      if (!winesByLocation[location]) {
+        winesByLocation[location] = [];
+      }
+      winesByLocation[location].push(wine);
+    });
     
     const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
-    let x = 14;
     
-    doc.setFontSize(8);
-    headers.forEach((header, i) => {
-      doc.text(header, x, y);
-      x += colWidths[i];
-    });
-    y += 6;
+    let grandTotalVærdi = 0;
+    let grandTotalWineCount = 0;
+    const locationTotals = {};
     
-    let totalVærdi = 0;
-    let wineCount = 0;
-    
-    wines.forEach(wine => {
-      if (y > 280) {
+    // Gennemgå hver lokation
+    Object.keys(winesByLocation).sort().forEach((location, locIndex) => {
+      const locationWines = winesByLocation[location];
+      let locationTotalVærdi = 0;
+      let locationWineCount = 0;
+      
+      // Tjek om vi skal tilføje ny side
+      if (y > 250) {
         doc.addPage();
         y = 20;
-        x = 14;
-        headers.forEach((header, i) => {
-          doc.text(header, x, y);
-          x += colWidths[i];
-        });
-        y += 6;
       }
       
-      const pris = wine.indkøbspris || 0;
-      const værdi = pris * (wine.antal || 0);
-      totalVærdi += værdi;
-      wineCount++;
+      // Lokation header
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text(`📍 ${location}`, 14, y);
+      y += 8;
       
-      x = 14;
-      const row = [
-        wine.vinId || '',
-        wine.navn || '',
-        wine.type || '',
-        wine.land || '',
-        wine.antal || 0,
-        wine.minAntal || 24,
-        pris.toFixed(2)
-      ];
-      
-      row.forEach((cell, i) => {
-        doc.text(String(cell).substring(0, 25), x, y);
+      // Tabel header
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      let x = 14;
+      headers.forEach((header, i) => {
+        doc.text(header, x, y);
         x += colWidths[i];
       });
       y += 6;
+      
+      // Vine i denne lokation
+      locationWines.forEach(wine => {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+          // Genprint header
+          x = 14;
+          doc.setFontSize(8);
+          headers.forEach((header, i) => {
+            doc.text(header, x, y);
+            x += colWidths[i];
+          });
+          y += 6;
+        }
+        
+        const pris = wine.indkøbspris || 0;
+        const værdi = pris * (wine.antal || 0);
+        locationTotalVærdi += værdi;
+        locationWineCount++;
+        
+        x = 14;
+        const row = [
+          wine.vinId || '',
+          wine.navn || '',
+          wine.type || '',
+          wine.land || '',
+          wine.antal || 0,
+          wine.minAntal || 24,
+          pris.toFixed(2)
+        ];
+        
+        row.forEach((cell, i) => {
+          doc.text(String(cell).substring(0, 25), x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      });
+      
+      // Lokation total
+      y += 3;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Total ${location}: ${locationWineCount} vine, ${formatDanskPris(locationTotalVærdi)} kr.`, 14, y);
+      y += 8;
+      
+      locationTotals[location] = {
+        værdi: locationTotalVærdi,
+        antal: locationWineCount
+      };
+      grandTotalVærdi += locationTotalVærdi;
+      grandTotalWineCount += locationWineCount;
     });
     
-    console.log(`✅ Tilføjet ${wineCount} vine til PDF`);
+    console.log(`✅ Tilføjet ${grandTotalWineCount} vine til PDF fra ${Object.keys(winesByLocation).length} lokationer`);
     
+    // Grand total
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
     y += 5;
-    doc.setFontSize(10);
-    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text('═══════════════════════════════════════', 14, y);
     y += 7;
+    doc.text(`SAMLET TOTAL: ${grandTotalWineCount} vine, ${formatDanskPris(grandTotalVærdi)} kr.`, 14, y);
+    y += 7;
+    doc.text('═══════════════════════════════════════', 14, y);
+    y += 10;
+    
     doc.setFontSize(8);
-    doc.text(`Antal vine: ${wineCount}`, 14, y);
-    y += 7;
+    doc.setFont(undefined, 'normal');
     doc.text('Rapport ID: ' + report.id, 14, y);
     
     // Vis PDF i browser
@@ -2336,66 +2393,123 @@ async function generateFullReportPDFForDownload(report) {
     
     doc.setFontSize(10);
     doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
-    y += 7;
-    doc.text('Lokation: ' + (report.location || 'Ukendt'), 14, y);
     y += 10;
+    
+    // Grupper vine efter lokation
+    const winesByLocation = {};
+    wines.forEach(wine => {
+      const location = wine.lokation || 'Ukendt lokation';
+      if (!winesByLocation[location]) {
+        winesByLocation[location] = [];
+      }
+      winesByLocation[location].push(wine);
+    });
     
     const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
-    let x = 14;
     
-    doc.setFontSize(8);
-    headers.forEach((header, i) => {
-      doc.text(header, x, y);
-      x += colWidths[i];
-    });
-    y += 6;
+    let grandTotalVærdi = 0;
+    let grandTotalWineCount = 0;
+    const locationTotals = {};
     
-    let totalVærdi = 0;
-    let wineCount = 0;
-    
-    wines.forEach(wine => {
-      if (y > 280) {
+    // Gennemgå hver lokation
+    Object.keys(winesByLocation).sort().forEach((location, locIndex) => {
+      const locationWines = winesByLocation[location];
+      let locationTotalVærdi = 0;
+      let locationWineCount = 0;
+      
+      // Tjek om vi skal tilføje ny side
+      if (y > 250) {
         doc.addPage();
         y = 20;
-        x = 14;
-        headers.forEach((header, i) => {
-          doc.text(header, x, y);
-          x += colWidths[i];
-        });
-        y += 6;
       }
       
-      const pris = wine.indkøbspris || 0;
-      const værdi = pris * (wine.antal || 0);
-      totalVærdi += værdi;
-      wineCount++;
+      // Lokation header
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text(`📍 ${location}`, 14, y);
+      y += 8;
       
-      x = 14;
-      const row = [
-        wine.vinId || '',
-        wine.navn || '',
-        wine.type || '',
-        wine.land || '',
-        wine.antal || 0,
-        wine.minAntal || 24,
-        pris.toFixed(2)
-      ];
-      
-      row.forEach((cell, i) => {
-        doc.text(String(cell).substring(0, 25), x, y);
+      // Tabel header
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      let x = 14;
+      headers.forEach((header, i) => {
+        doc.text(header, x, y);
         x += colWidths[i];
       });
       y += 6;
+      
+      // Vine i denne lokation
+      locationWines.forEach(wine => {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+          // Genprint header
+          x = 14;
+          doc.setFontSize(8);
+          headers.forEach((header, i) => {
+            doc.text(header, x, y);
+            x += colWidths[i];
+          });
+          y += 6;
+        }
+        
+        const pris = wine.indkøbspris || 0;
+        const værdi = pris * (wine.antal || 0);
+        locationTotalVærdi += værdi;
+        locationWineCount++;
+        
+        x = 14;
+        const row = [
+          wine.vinId || '',
+          wine.navn || '',
+          wine.type || '',
+          wine.land || '',
+          wine.antal || 0,
+          wine.minAntal || 24,
+          pris.toFixed(2)
+        ];
+        
+        row.forEach((cell, i) => {
+          doc.text(String(cell).substring(0, 25), x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      });
+      
+      // Lokation total
+      y += 3;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Total ${location}: ${locationWineCount} vine, ${formatDanskPris(locationTotalVærdi)} kr.`, 14, y);
+      y += 8;
+      
+      locationTotals[location] = {
+        værdi: locationTotalVærdi,
+        antal: locationWineCount
+      };
+      grandTotalVærdi += locationTotalVærdi;
+      grandTotalWineCount += locationWineCount;
     });
     
+    // Grand total
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
     y += 5;
-    doc.setFontSize(10);
-    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text('═══════════════════════════════════════', 14, y);
     y += 7;
+    doc.text(`SAMLET TOTAL: ${grandTotalWineCount} vine, ${formatDanskPris(grandTotalVærdi)} kr.`, 14, y);
+    y += 7;
+    doc.text('═══════════════════════════════════════', 14, y);
+    y += 10;
+    
     doc.setFontSize(8);
-    doc.text(`Antal vine: ${wineCount}`, 14, y);
-    y += 7;
+    doc.setFont(undefined, 'normal');
     doc.text('Rapport ID: ' + report.id, 14, y);
     
     // Download PDF
