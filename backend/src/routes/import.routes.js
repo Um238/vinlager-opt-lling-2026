@@ -11,4 +11,7 @@ router.post('/excel', importUpload.single('file'), importController.importExcel)
 router.get('/csv', importController.exportCSV);
 router.get('/excel', importController.exportExcel);
 
+// Download template route
+router.get('/template', importController.downloadTemplate);
+
 module.exports = router;
