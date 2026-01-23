@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v48
+// VINLAGER OPTÆLLING 2026 - APP.JS v49
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v48 - Tilføj Lokation kolonne til lager tabel');
+console.log('Version: v49 - Fiks kolonne rækkefølge til at matche Excel skabelon');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -707,7 +707,7 @@ function renderLager() {
     console.warn('⚠️ allWines er tom - prøver at hente data igen...');
     const tbody = document.getElementById('lager-tbody');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="16" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
     }
     // Prøv at hente data igen
     loadWines().then(() => {
@@ -758,12 +758,16 @@ function renderLager() {
     
     const lavtLager = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
     row.innerHTML = `
+      <td>${wine.vinId || ''}</td>
       <td>${wine.varenummer || ''}</td>
       <td>${wine.navn || ''}</td>
       <td>${wine.type || ''}</td>
+      <td>${wine.kategori || wine.type || ''}</td>
       <td>${wine.land || ''}</td>
       <td>${wine.region || ''}</td>
+      <td>${wine.drue || ''}</td>
       <td>${wine.årgang || ''}</td>
+      <td><span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;">${wine.lokation || 'Ukendt'}</span></td>
       <td>${wine.reol || ''}</td>
       <td>${wine.hylde || ''}</td>
       <td class="text-right antal-cell"${lavtLager}>${wine.antal || 0}</td>
@@ -786,7 +790,7 @@ function renderLager() {
                data-vinid="${wine.vinId}"
                step="0.01"
                min="0"
-               placeholder="0.00"
+               placeholder="0,00"
                style="width: 80px; text-align: right; border: 1px solid #ddd; padding: 2px 5px; background: white;">
         ${wine.indkøbspris ? ' kr.' : ''}
       </td>
