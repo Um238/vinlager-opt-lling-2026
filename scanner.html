@@ -51,7 +51,7 @@
       position: relative;
       background: #4CAF50;
       color: white;
-      padding: 12px 80px 12px 16px;
+      padding: 10px 75px 10px 12px;
       text-align: center;
       z-index: 10;
       flex-shrink: 0;
@@ -60,17 +60,17 @@
     .scanner-header-content {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
     
     .location-selector {
       margin: 0;
-      padding: 10px;
+      padding: 8px;
       background: rgba(255,255,255,0.95);
-      border-radius: 8px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
       box-sizing: border-box;
     }
@@ -78,60 +78,61 @@
     .location-selector label {
       font-weight: 600;
       color: #333;
-      font-size: 0.9em;
+      font-size: 0.85em;
       white-space: nowrap;
+      flex-shrink: 0;
     }
     
     .location-selector select {
       flex: 1;
-      padding: 10px;
-      font-size: 1em;
+      padding: 8px 10px;
+      font-size: 0.9em;
       border: 2px solid #4CAF50;
       border-radius: 6px;
       background: white;
       color: #333;
       font-weight: 600;
+      min-width: 0;
     }
     
     @media (max-width: 768px) {
       .location-selector {
-        margin: 12px 16px 0 16px;
-        padding: 14px;
+        padding: 10px;
       }
       .location-selector label {
-        font-size: 1em;
+        font-size: 0.95em;
       }
       .location-selector select {
-        padding: 12px;
-        font-size: 1.1em;
+        padding: 10px 12px;
+        font-size: 1em;
       }
     }
     
     .scanner-header h1 {
       margin: 0;
-      font-size: 1.5em;
+      font-size: 1.3em;
       font-weight: 600;
       line-height: 1.2;
     }
     
     @media (max-width: 768px) {
       .scanner-header h1 {
-        font-size: 1.7em;
+        font-size: 1.5em;
       }
     }
     
     .scanner-close-btn {
       position: absolute;
-      top: 8px;
-      right: 8px;
+      top: 6px;
+      right: 6px;
       background: rgba(255,255,255,0.95);
       color: #4CAF50;
       border: none;
-      padding: 8px 16px;
-      border-radius: 16px;
+      padding: 6px 12px;
+      border-radius: 12px;
       font-weight: 700;
-      font-size: 1em;
-      min-width: 60px;
+      font-size: 0.9em;
+      min-width: 50px;
       cursor: pointer;
       touch-action: manipulation;
       z-index: 20;
@@ -140,9 +141,9 @@
     
     @media (max-width: 768px) {
       .scanner-close-btn {
-        font-size: 1.1em;
-        padding: 10px 18px;
-        min-width: 70px;
+        font-size: 1em;
+        padding: 8px 14px;
+        min-width: 60px;
       }
     }
 
@@ -668,15 +669,19 @@
           await apiCall(`/api/count/${currentWine.vinId}`, {
             method: 'POST',
             body: JSON.stringify({
-              nytAntal: quantity
+              nytAntal: quantity,
+              locationId: selectedLocationId
             })
           });
         }
         
-        // Gem i scannedWines map
+        // Gem i scannedWines map med lokation info
+        const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
         scannedWines.set(currentWine.vinId, {
           ...currentWine,
-          antal: quantity
+          antal: quantity,
+          locationId: selectedLocationId,
+          locationName: locationName
         });
         
         showStatus(`✅ ${currentWine.navn || currentWine.vinId}: ${quantity}`, 'success');
@@ -693,7 +698,8 @@
           return;
         }
       } else {
-        if (!confirm(`Er du sikker på at du vil afslutte optællingen?\n\n${scannedWines.size} vine scannet.\nEn rapport vil blive genereret.`)) {
+        const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
+        if (!confirm(`Er du sikker på at du vil afslutte optællingen?\n\n${scannedWines.size} vine scannet.\nLokation: ${locationName}\nEn rapport vil blive genereret.`)) {
           return;
         }
       }
@@ -707,22 +713,32 @@
         }
         qrScanning = false;
         
-        const wines = await apiCall('/api/reports/lager');
+        // Brug KUN scannede vine, ikke alle vine i systemet
+        const wines = Array.from(scannedWines.values());
+        
+        if (wines.length === 0) {
+          alert('Ingen vine scannet. Ingen rapport kan genereres.');
+          return;
+        }
         
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
+        const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
+        
         let y = 20;
         doc.setFontSize(16);
-        doc.text('Lagerrapport - Optælling Afsluttet', 14, y);
-        y += 10;
+        doc.text('Optællingsrapport', 14, y);
+        y += 8;
         
         doc.setFontSize(10);
         doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
-        y += 10;
+        y += 6;
+        doc.text('Lokation: ' + locationName, 14, y);
+        y += 8;
         
-        const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
-        const colWidths = [30, 60, 25, 25, 15, 15, 30];
+        const headers = ['VIN-ID', 'Navn', 'Type', 'Lokation', 'Antal', 'Min', 'Pris'];
+        const colWidths = [30, 50, 20, 25, 15, 15, 25];
         let x = 14;
         
         doc.setFontSize(8);
@@ -753,16 +769,16 @@
           x = 14;
           const row = [
             wine.vinId || '',
-            wine.navn || '',
+            wine.navn || 'Ukendt vare',
             wine.type || '',
-            wine.land || '',
+            wine.locationName || locationName || 'Ikke valgt',
             wine.antal || 0,
             wine.minAntal || 24,
             pris.toFixed(2)
           ];
           
           row.forEach((cell, i) => {
-            doc.text(String(cell).substring(0, 25), x, y);
+            doc.text(String(cell).substring(0, 20), x, y);
             x += colWidths[i];
           });
           y += 6;
@@ -771,6 +787,8 @@
         y += 5;
         doc.setFontSize(10);
         doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+        y += 6;
+        doc.text(`Antal scannet: ${wines.length} vine`, 14, y);
         
         const reportData = {
           reportId: Date.now().toString(),
@@ -779,7 +797,7 @@
           type: 'lager',
           wineCount: wines.length,
           totalValue: totalVærdi,
-          location: 'Mobil Optælling',
+          location: locationName,
           archived: false
         };
         
@@ -815,7 +833,7 @@
         showStatus('✅ Rapport genereret!', 'success');
         
         setTimeout(() => {
-          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} vine.\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.`);
+          alert(`✅ Optælling afsluttet!\n\nRapport genereret med ${wines.length} scannet vine.\nLokation: ${locationName}\nTotal værdi: ${formatDanskPris(totalVærdi)} kr.`);
           window.location.href = 'index.html';
         }, 1000);
         
