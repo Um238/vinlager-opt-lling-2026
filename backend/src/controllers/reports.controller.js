@@ -1,17 +1,30 @@
 const db = require('../config/database');
 
-// Lagerrapport
+// Lagerrapport - med lokation data fra inventory system
 exports.getLagerReport = (req, res) => {
   db.all(
     `SELECT 
-      vinId, navn, type, land, region, årgang, reol, hylde, 
-      antal, minAntal, indkøbspris, 
-      CASE WHEN antal < minAntal THEN 1 ELSE 0 END as lavtLager
-    FROM wines 
-    ORDER BY reol, hylde, navn`,
+      w.vinId,
+      w.navn,
+      w.type,
+      w.land,
+      w.region,
+      w.årgang,
+      w.indkøbspris,
+      l.name as lokation,
+      i.reol,
+      i.hylde,
+      i.antal,
+      i.minAntal,
+      CASE WHEN i.antal < i.minAntal THEN 1 ELSE 0 END as lavtLager
+    FROM wines w
+    INNER JOIN inventory i ON w.id = i.wine_id
+    INNER JOIN locations l ON i.location_id = l.id
+    ORDER BY l.name, i.reol, i.hylde, w.navn`,
     [],
     (err, rows) => {
       if (err) {
+        console.error('Fejl ved hentning af lagerrapport:', err);
         return res.status(500).json({ error: 'Fejl ved hentning af rapport' });
       }
       res.json(rows);
