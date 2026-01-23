@@ -58,29 +58,133 @@ exports.getAll = (req, res) => {
   });
 };
 
-// Hent vin efter vinId eller varenummer
+// Hent vin efter vinId eller varenummer (med lokation data)
 exports.getByVinId = (req, res) => {
   const { vinId } = req.params;
   
-  // Søg først på vinId, hvis ikke fundet søg på varenummer
-  db.get('SELECT * FROM wines WHERE vinId = ?', [vinId], (err, row) => {
+  // Søg først på vinId med inventory data
+  let query = `
+    SELECT 
+      w.id,
+      w.vinId,
+      w.varenummer,
+      w.navn,
+      w.type,
+      w.kategori,
+      w.land,
+      w.region,
+      w.drue,
+      w.årgang,
+      w.indkøbspris,
+      w.billede,
+      w.oprettet,
+      w.opdateret,
+      l.name as lokation,
+      i.reol,
+      i.hylde,
+      i.antal,
+      i.minAntal,
+      i.location_id
+    FROM wines w
+    LEFT JOIN inventory i ON w.id = i.wine_id
+    LEFT JOIN locations l ON i.location_id = l.id
+    WHERE w.vinId = ?
+    LIMIT 1
+  `;
+  
+  db.get(query, [vinId], (err, row) => {
     if (err) {
       return res.status(500).json({ error: 'Fejl ved hentning af vin' });
     }
     
     if (row) {
-      return res.json(row);
+      // Hvis der ikke er inventory data, prøv at finde første inventory record for denne vin
+      if (!row.lokation) {
+        db.get(`
+          SELECT 
+            l.name as lokation,
+            i.reol,
+            i.hylde,
+            i.antal,
+            i.minAntal,
+            i.location_id
+          FROM inventory i
+          LEFT JOIN locations l ON i.location_id = l.id
+          WHERE i.wine_id = ?
+          LIMIT 1
+        `, [row.id], (err2, invRow) => {
+          if (!err2 && invRow) {
+            Object.assign(row, invRow);
+          }
+          return res.json(row);
+        });
+      } else {
+        return res.json(row);
+      }
+      return;
     }
     
     // Hvis ikke fundet på vinId, prøv varenummer
-    db.get('SELECT * FROM wines WHERE varenummer = ?', [vinId], (err, row2) => {
+    query = `
+      SELECT 
+        w.id,
+        w.vinId,
+        w.varenummer,
+        w.navn,
+        w.type,
+        w.kategori,
+        w.land,
+        w.region,
+        w.drue,
+        w.årgang,
+        w.indkøbspris,
+        w.billede,
+        w.oprettet,
+        w.opdateret,
+        l.name as lokation,
+        i.reol,
+        i.hylde,
+        i.antal,
+        i.minAntal,
+        i.location_id
+      FROM wines w
+      LEFT JOIN inventory i ON w.id = i.wine_id
+      LEFT JOIN locations l ON i.location_id = l.id
+      WHERE w.varenummer = ?
+      LIMIT 1
+    `;
+    
+    db.get(query, [vinId], (err, row2) => {
       if (err) {
         return res.status(500).json({ error: 'Fejl ved hentning af vin' });
       }
       if (!row2) {
         return res.status(404).json({ error: 'Vin ikke fundet (søgte på VIN-ID og varenummer)' });
       }
-      res.json(row2);
+      
+      // Hvis der ikke er inventory data, prøv at finde første inventory record
+      if (!row2.lokation) {
+        db.get(`
+          SELECT 
+            l.name as lokation,
+            i.reol,
+            i.hylde,
+            i.antal,
+            i.minAntal,
+            i.location_id
+          FROM inventory i
+          LEFT JOIN locations l ON i.location_id = l.id
+          WHERE i.wine_id = ?
+          LIMIT 1
+        `, [row2.id], (err3, invRow) => {
+          if (!err3 && invRow) {
+            Object.assign(row2, invRow);
+          }
+          return res.json(row2);
+        });
+      } else {
+        return res.json(row2);
+      }
     });
   });
 };
