@@ -5,7 +5,7 @@ const path = require('path');
 exports.getAll = (req, res) => {
   const { reol, hylde, location } = req.query;
   
-  // Hent alle vine med deres inventory data (inkl. lokation)
+  // Hent alle vine med deres inventory data (inkl. lokation) - korrekt rækkefølge som Excel skabelon
   let query = `
     SELECT 
       w.id,
