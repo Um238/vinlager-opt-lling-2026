@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v54
+// VINLAGER OPTÆLLING 2026 - APP.JS v55
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v54 - Tilføj Lokation dropdown til Labels og Lageroversigt');
+console.log('Version: v55 - Fiks rapport gruppering og encoding problemer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2240,7 +2240,7 @@ async function generateFullReportPDF(report) {
       // Lokation header
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      doc.text(`📍 ${location}`, 14, y);
+      doc.text(`Lokation: ${location}`, 14, y);
       y += 8;
       
       // Tabel header
@@ -2316,11 +2316,12 @@ async function generateFullReportPDF(report) {
     y += 5;
     doc.setFontSize(11);
     doc.setFont(undefined, 'bold');
-    doc.text('═══════════════════════════════════════', 14, y);
+    // Brug enkelte karakterer i stedet for special characters for bedre encoding
+    doc.text('=======================================', 14, y);
     y += 7;
     doc.text(`SAMLET TOTAL: ${grandTotalWineCount} vine, ${formatDanskPris(grandTotalVærdi)} kr.`, 14, y);
     y += 7;
-    doc.text('═══════════════════════════════════════', 14, y);
+    doc.text('=======================================', 14, y);
     y += 10;
     
     doc.setFontSize(8);
@@ -2460,7 +2461,7 @@ async function generateFullReportPDFForDownload(report) {
       // Lokation header
       doc.setFontSize(12);
       doc.setFont(undefined, 'bold');
-      doc.text(`📍 ${location}`, 14, y);
+      doc.text(`Lokation: ${location}`, 14, y);
       y += 8;
       
       // Tabel header
@@ -2534,11 +2535,12 @@ async function generateFullReportPDFForDownload(report) {
     y += 5;
     doc.setFontSize(11);
     doc.setFont(undefined, 'bold');
-    doc.text('═══════════════════════════════════════', 14, y);
+    // Brug enkelte karakterer i stedet for special characters for bedre encoding
+    doc.text('=======================================', 14, y);
     y += 7;
     doc.text(`SAMLET TOTAL: ${grandTotalWineCount} vine, ${formatDanskPris(grandTotalVærdi)} kr.`, 14, y);
     y += 7;
-    doc.text('═══════════════════════════════════════', 14, y);
+    doc.text('=======================================', 14, y);
     y += 10;
     
     doc.setFontSize(8);
