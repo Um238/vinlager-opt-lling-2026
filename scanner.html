@@ -51,20 +51,28 @@
       position: relative;
       background: #4CAF50;
       color: white;
-      padding: 16px 70px 16px 16px;
+      padding: 12px 80px 12px 16px;
       text-align: center;
       z-index: 10;
       flex-shrink: 0;
     }
     
+    .scanner-header-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
     .location-selector {
-      margin: 10px 16px 0 16px;
-      padding: 12px;
+      margin: 0;
+      padding: 10px;
       background: rgba(255,255,255,0.95);
       border-radius: 8px;
       display: flex;
       align-items: center;
       gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
     }
     
     .location-selector label {
@@ -101,37 +109,40 @@
     
     .scanner-header h1 {
       margin: 0;
-      font-size: 1.8em;
+      font-size: 1.5em;
       font-weight: 600;
+      line-height: 1.2;
     }
     
     @media (max-width: 768px) {
       .scanner-header h1 {
-        font-size: 2em;
+        font-size: 1.7em;
       }
     }
     
     .scanner-close-btn {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(255,255,255,0.9);
+      top: 8px;
+      right: 8px;
+      background: rgba(255,255,255,0.95);
       color: #4CAF50;
       border: none;
-      padding: 12px 20px;
-      border-radius: 20px;
+      padding: 8px 16px;
+      border-radius: 16px;
       font-weight: 700;
-      font-size: 1.2em;
-      min-width: 70px;
+      font-size: 1em;
+      min-width: 60px;
       cursor: pointer;
       touch-action: manipulation;
+      z-index: 20;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
     @media (max-width: 768px) {
       .scanner-close-btn {
-        font-size: 1.3em;
-        padding: 14px 22px;
-        min-width: 80px;
+        font-size: 1.1em;
+        padding: 10px 18px;
+        min-width: 70px;
       }
     }
 
@@ -350,15 +361,17 @@
 <body>
   <div class="scanner-container">
     <div class="scanner-header">
-      <h1>🍷 Vinlager Scanner</h1>
       <button class="scanner-close-btn" onclick="closeScanner()">✕ Luk</button>
-      <div class="location-selector">
-        <label for="location-select">📍 Lokation:</label>
-        <select id="location-select">
-          <option value="">Henter lokationer...</option>
-        </select>
+      <div class="scanner-header-content">
+        <h1>🍷 Vinlager Scanner</h1>
+        <div class="location-selector">
+          <label for="location-select">📍 Lokation:</label>
+          <select id="location-select">
+            <option value="">Henter lokationer...</option>
+          </select>
+        </div>
+        <div id="status-message" class="status-message" style="display: none;"></div>
       </div>
-      <div id="status-message" class="status-message" style="display: none;"></div>
     </div>
     
     <div class="video-container">
