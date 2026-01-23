@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v56
+// VINLAGER OPTÆLLING 2026 - APP.JS v57
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v56 - Fiks dashboard opdatering, labels, rapporter markering');
+console.log('Version: v57 - Fiks tidsstempler, rapporter visning, dashboard opdatering');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -1734,9 +1734,12 @@ function checkForNewReport() {
   }
   
   // OPDATER OGSÅ LAGER DATA - så dashboard opdateres efter scanning
-  if (typeof loadWines === 'function') {
-    loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
-  }
+  // Vent lidt først så backend har tid til at gemme data
+  setTimeout(() => {
+    if (typeof loadWines === 'function') {
+      loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
+    }
+  }, 1000); // Vent 1 sekund
   
   // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
   const newReportAvailable = localStorage.getItem('newReportAvailable');
@@ -1803,6 +1806,9 @@ async function loadReportsHistory() {
         console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
         if (reportsHistory.length > 0) {
           console.log('📋 Eksempel rapport:', reportsHistory[0]);
+          console.log('📋 Alle rapporter:', reportsHistory.map(r => ({ id: r.id, name: r.name, date: r.date, location: r.location })));
+        } else {
+          console.warn('⚠️ Ingen rapporter fundet i backend!');
         }
       } else {
         // Hvis backend returnerer tom array, brug den alligevel (så vi ikke bruger gammel localStorage data)
@@ -1921,6 +1927,36 @@ function updateLocationFilter() {
     locationSelect.value = currentValue;
   } else {
     locationSelect.value = 'all';
+  }
+}
+
+// Formatér dato til dansk format
+function formatDanskDato(dateStr) {
+  if (!dateStr) return '';
+  
+  try {
+    // Håndter SQLite format: "2026-01-23 15:29:30"
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+      let isoStr = dateStr;
+      if (!dateStr.includes('T') && dateStr.includes(' ')) {
+        isoStr = dateStr.replace(' ', 'T');
+      }
+      const date = new Date(isoStr);
+      if (!isNaN(date.getTime())) {
+        // Formatér til dansk: "23.01.2026 15:29"
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${day}.${month}.${year} ${hours}:${minutes}`;
+      }
+    }
+    // Hvis allerede formateret, returnér som det er
+    return dateStr;
+  } catch (e) {
+    console.warn('Fejl ved formatering af dato:', dateStr, e);
+    return dateStr;
   }
 }
 
@@ -2093,6 +2129,9 @@ function renderReportsTable() {
   
   tbody.innerHTML = '';
   
+  console.log('📊 RenderReportsTable - Filteret resultat:', filtered.length, 'af', reportsHistory.length, 'rapporter');
+  console.log('📊 Filterede rapporter:', filtered.map(r => ({ id: r.id, name: r.name, date: r.date })));
+  
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" style="padding: 1rem; text-align: center; color: #999;">Ingen rapporter fundet</td></tr>';
     return;
@@ -2102,10 +2141,10 @@ function renderReportsTable() {
     const row = document.createElement('tr');
     row.style.borderBottom = '1px solid #eee';
     
-    // Dato kolonne
+    // Dato kolonne - formatér korrekt
     const dateCell = document.createElement('td');
     dateCell.style.padding = '0.75rem';
-    dateCell.textContent = report.date;
+    dateCell.textContent = formatDanskDato(report.date);
     row.appendChild(dateCell);
     
     // Navn kolonne
