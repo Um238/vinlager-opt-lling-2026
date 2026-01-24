@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v66
+// VINLAGER OPTÆLLING 2026 - APP.JS v68
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v66 - Fjernet status-bjælke, fixet rød/gul/grøn, sikret opdateringer');
+console.log('Version: v68 - 404 fejl håndteres stille, ingen forstyrrende beskeder');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -429,6 +429,15 @@ async function apiCall(endpoint, options = {}) {
     });
 
     if (!response.ok) {
+      // 404 fejl skal håndteres stille (ikke forstyrrende)
+      if (response.status === 404) {
+        // Returner tom array for rapporter, ellers throw
+        if (endpoint.includes('/reports/')) {
+          return [];
+        }
+        throw new Error(`API endpoint ikke fundet: ${endpoint}`);
+      }
+      
       // Tjek om responsen er JSON eller HTML
       const contentType = response.headers.get('content-type');
       let errorMessage = `API fejl: ${response.status} ${response.statusText}`;
@@ -441,13 +450,8 @@ async function apiCall(endpoint, options = {}) {
           // Hvis JSON parsing fejler, brug standard fejlbesked
         }
       } else {
-        // Hvis det er HTML (fx 404 side), læs teksten men brug ikke den
-        const text = await response.text();
-        if (response.status === 404) {
-          errorMessage = `API endpoint ikke fundet: ${endpoint}. Backend serveren mangler denne rute.`;
-        } else {
-          errorMessage = `Server fejl (${response.status}): ${response.statusText}`;
-        }
+        // Hvis det er HTML, læs ikke (forstyrrer ikke)
+        errorMessage = `Server fejl (${response.status}): ${response.statusText}`;
       }
       throw new Error(errorMessage);
     }
@@ -1959,26 +1963,10 @@ function checkForNewReport() {
     }
   }, 1500); // Vent 1.5 sekunder for at backend kan gemme
   
-  // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
-  const newReportAvailable = localStorage.getItem('newReportAvailable');
-  if (newReportAvailable === 'true') {
-    // Vis notifikation
-    const notification = document.createElement('div');
-    notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 10000; max-width: 300px;';
-    notification.innerHTML = `
-      <h3 style="margin: 0 0 10px 0;">✅ Ny rapport tilgængelig!</h3>
-      <p style="margin: 0 0 15px 0;">Optælling fra mobil er afsluttet.</p>
-      <button onclick="showReportsPage(); this.parentElement.remove(); localStorage.removeItem('newReportAvailable'); loadReportsHistory();" style="background: white; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">Se rapport</button>
-      <button onclick="this.parentElement.remove(); localStorage.removeItem('newReportAvailable');" style="background: transparent; color: white; border: 1px solid white; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Luk</button>
-    `;
-    document.body.appendChild(notification);
-    
-    // Auto-fjern efter 10 sekunder
-    setTimeout(() => {
-      if (notification.parentElement) {
-        notification.remove();
-      }
-    }, 10000);
+  // FJERNET: Grøn notifikation der forstyrrer - rapporter opdateres automatisk i stedet
+  // Fjern flag hvis det er sat (for at undgå at det bliver vist igen)
+  if (localStorage.getItem('newReportAvailable') === 'true') {
+    localStorage.removeItem('newReportAvailable');
   }
 }
 
@@ -1994,14 +1982,11 @@ function showReportsPage() {
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
-    console.log('🔄 Henter rapporter fra backend...');
     // ALTID hent fra backend først (så vi får rapporter fra mobil)
     try {
       const backendReports = await apiCall('/api/reports/history');
-      console.log('📊 Backend returnerede:', backendReports?.length || 0, 'rapporter');
-      console.log('📊 Første rapport:', backendReports?.[0]);
       
-      if (backendReports && Array.isArray(backendReports)) {
+      if (backendReports && Array.isArray(backendReports) && backendReports.length > 0) {
         // Brug backend data - dette sikrer at rapporter fra mobil også vises
         reportsHistory = backendReports.map(r => ({
           id: r.id || r.reportId || r.report_id,
@@ -2021,20 +2006,12 @@ async function loadReportsHistory() {
         });
         // Gem også i localStorage som backup
         localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
-        console.log('✅ Rapporter hentet fra backend:', reportsHistory.length);
-        if (reportsHistory.length > 0) {
-          console.log('📋 Eksempel rapport:', reportsHistory[0]);
-          console.log('📋 Alle rapporter:', reportsHistory.map(r => ({ id: r.id, name: r.name, date: r.date, location: r.location })));
-        } else {
-          console.warn('⚠️ Ingen rapporter fundet i backend!');
-        }
       } else {
-        // Backend tom (fx efter deploy) – brug localStorage backup i stedet for at overskrive
+        // Backend tom eller ingen rapporter – brug localStorage backup i stedet for at overskrive
         const saved = localStorage.getItem('reportsHistory');
         if (saved) {
           try {
             reportsHistory = JSON.parse(saved);
-            console.log('⚠️ Backend tom – bruger localStorage backup:', reportsHistory.length, 'rapporter');
           } catch (e) {
             reportsHistory = [];
           }
@@ -2043,25 +2020,23 @@ async function loadReportsHistory() {
         }
       }
     } catch (backendError) {
-      console.error('❌ Fejl ved hentning fra backend:', backendError);
-      console.error('❌ Fejl detaljer:', backendError.message, backendError.stack);
-      // Fallback til localStorage kun hvis backend fejler
+      // 404 eller anden fejl - brug localStorage backup stille
       const saved = localStorage.getItem('reportsHistory');
       if (saved) {
         try {
           reportsHistory = JSON.parse(saved);
-          console.log('⚠️ Bruger localStorage backup:', reportsHistory.length, 'rapporter');
         } catch (parseError) {
-          console.error('Fejl ved parsing af localStorage:', parseError);
           reportsHistory = [];
         }
       } else {
         reportsHistory = [];
       }
-      // Prøv at hente fra backend igen efter 3 sekunder
-      setTimeout(() => {
-        loadReportsHistory();
-      }, 3000);
+      // Prøv at hente fra backend igen efter 5 sekunder (kun hvis vi ikke har backup)
+      if (reportsHistory.length === 0) {
+        setTimeout(() => {
+          loadReportsHistory();
+        }, 5000);
+      }
     }
   // Opdater lokation filter før vi renderer tabellen
   updateLocationFilter();
