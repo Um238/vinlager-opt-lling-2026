@@ -107,52 +107,74 @@ exports.updateCount = (req, res) => {
           }
         );
       } else {
-        // Fallback: Opdater wines tabel direkte (gammel metode - for bagudkompatibilitet)
-        db.get('SELECT antal FROM wines WHERE vinId = ?', [vinId], (err, wine) => {
+        // KRITISK FIX: Hvis ingen locationId, find eller opret en default lokation
+        // Først prøv at finde en eksisterende lokation (fx "Lokal" eller første lokation)
+        db.get('SELECT id FROM locations ORDER BY id LIMIT 1', [], (err, defaultLocation) => {
           if (err) {
-            return res.status(500).json({ error: 'Fejl ved hentning af vin' });
+            console.error('Fejl ved hentning af default lokation:', err);
+            // Hvis ingen lokationer findes, opdater wines direkte som fallback
+            return updateWinesDirectly();
           }
-
-          const forrigeAntal = wine.antal;
-          let nyVærdi;
-
-          if (nytAntal !== undefined) {
-            nyVærdi = parseInt(nytAntal);
-          } else if (ændring !== undefined) {
-            nyVærdi = forrigeAntal + parseInt(ændring);
+          
+          // Hvis der findes en lokation, brug den
+          if (defaultLocation) {
+            finalLocationId = defaultLocation.id;
+            // Genkald continueUpdateCount med locationId
+            continueUpdateCount();
           } else {
-            return res.status(400).json({ error: 'Enten ændring eller nytAntal skal angives' });
+            // Ingen lokationer - opdater wines direkte
+            updateWinesDirectly();
           }
-
-          db.run(
-            'UPDATE wines SET antal = ?, opdateret = CURRENT_TIMESTAMP WHERE vinId = ?',
-            [nyVærdi, vinId],
-            function(updateErr) {
-              if (updateErr) {
-                return res.status(500).json({ error: 'Fejl ved opdatering af antal' });
-              }
-
-              const ændringVærdi = nyVærdi - forrigeAntal;
-              db.run(
-                'INSERT INTO counts (vinId, forrigeAntal, nytAntal, ændring) VALUES (?, ?, ?, ?)',
-                [vinId, forrigeAntal, nyVærdi, ændringVærdi],
-                (logErr) => {
-                  if (logErr) {
-                    console.error('Fejl ved logging:', logErr);
-                  }
-                }
-              );
-
-              res.json({
-                message: 'Antal opdateret',
-                vinId,
-                forrigeAntal,
-                nytAntal: nyVærdi,
-                ændring: ændringVærdi
-              });
-            }
-          );
         });
+        
+        function updateWinesDirectly() {
+          // Fallback: Opdater wines tabel direkte (gammel metode - for bagudkompatibilitet)
+          db.get('SELECT antal FROM wines WHERE vinId = ?', [vinId], (err, wine) => {
+            if (err) {
+              return res.status(500).json({ error: 'Fejl ved hentning af vin' });
+            }
+
+            const forrigeAntal = wine ? wine.antal : 0;
+            let nyVærdi;
+
+            if (nytAntal !== undefined) {
+              nyVærdi = parseInt(nytAntal);
+            } else if (ændring !== undefined) {
+              nyVærdi = forrigeAntal + parseInt(ændring);
+            } else {
+              return res.status(400).json({ error: 'Enten ændring eller nytAntal skal angives' });
+            }
+
+            db.run(
+              'UPDATE wines SET antal = ?, opdateret = CURRENT_TIMESTAMP WHERE vinId = ?',
+              [nyVærdi, vinId],
+              function(updateErr) {
+                if (updateErr) {
+                  return res.status(500).json({ error: 'Fejl ved opdatering af antal' });
+                }
+
+                const ændringVærdi = nyVærdi - forrigeAntal;
+                db.run(
+                  'INSERT INTO counts (vinId, forrigeAntal, nytAntal, ændring) VALUES (?, ?, ?, ?)',
+                  [vinId, forrigeAntal, nyVærdi, ændringVærdi],
+                  (logErr) => {
+                    if (logErr) {
+                      console.error('Fejl ved logging:', logErr);
+                    }
+                  }
+                );
+
+                res.json({
+                  message: 'Antal opdateret',
+                  vinId,
+                  forrigeAntal,
+                  nytAntal: nyVærdi,
+                  ændring: ændringVærdi
+                });
+              }
+            );
+          });
+        }
       }
     });
   }
