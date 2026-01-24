@@ -920,21 +920,45 @@
       }
     }
     
-    // Luk scanner
+    // Luk scanner - ALTID luk uden bekræftelse (brugeren kan altid komme tilbage)
     function closeScanner() {
-      if (confirm('Er du sikker på at du vil lukke scanneren?')) {
-        if (scanAnimationFrame) {
-          cancelAnimationFrame(scanAnimationFrame);
-          scanAnimationFrame = null;
-        }
-        if (qrStream) {
-          qrStream.getTracks().forEach(track => track.stop());
-          qrStream = null;
-        }
-        qrScanning = false;
+      // Stop scanning
+      if (scanAnimationFrame) {
+        cancelAnimationFrame(scanAnimationFrame);
+        scanAnimationFrame = null;
+      }
+      if (qrStream) {
+        qrStream.getTracks().forEach(track => track.stop());
+        qrStream = null;
+      }
+      qrScanning = false;
+      
+      // Naviger tilbage til hovedprogrammet
+      try {
         window.location.href = 'index.html';
+      } catch (e) {
+        // Fallback hvis navigation fejler
+        console.error('Fejl ved navigation:', e);
+        // Prøv at åbne i nyt vindue
+        window.open('index.html', '_self');
       }
     }
+    
+    // Tilføj også en "Tilbage" knap i header som altid er synlig
+    document.addEventListener('DOMContentLoaded', function() {
+      const header = document.querySelector('.scanner-header');
+      if (header) {
+        // Tjek om luk-knappen allerede findes
+        let closeBtn = document.querySelector('.scanner-close-btn');
+        if (!closeBtn) {
+          closeBtn = document.createElement('button');
+          closeBtn.className = 'scanner-close-btn';
+          closeBtn.textContent = '✕ Luk';
+          closeBtn.onclick = closeScanner;
+          header.appendChild(closeBtn);
+        }
+      }
+    });
     
     // Vis status
     function showStatus(message, type) {

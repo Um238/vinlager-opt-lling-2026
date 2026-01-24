@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v60
+// VINLAGER OPTÆLLING 2026 - APP.JS v61
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v60 - Fiks tidsstempler timezone, scanner QR-kode');
+console.log('Version: v61 - Fiks scanner låsning, tidsstempler, lager opdatering, lavt lager visning');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -528,6 +528,9 @@ async function loadWines() {
     updateDashboard();
     populateFilters();
     
+    // OPDATER LAGER TABEL - vigtigt efter optælling
+    renderLager();
+    
     // Setup scan input autocomplete efter vine er indlæst
     if (document.getElementById('scan-input')) {
       setupScanInput();
@@ -566,11 +569,17 @@ function updateDashboard() {
   if (statAntVine) statAntVine.textContent = antVine;
   if (statLavt) {
     statLavt.textContent = lavtLager;
-    // Opdater farve baseret på antal
+    // Opdater farve baseret på antal - TYDELIG markering
     if (lavtLager > 0) {
       statLavt.classList.add('warning');
+      statLavt.style.color = '#c00';
+      statLavt.style.fontWeight = 'bold';
+      statLavt.style.fontSize = '1.2em';
     } else {
       statLavt.classList.remove('warning');
+      statLavt.style.color = '';
+      statLavt.style.fontWeight = '';
+      statLavt.style.fontSize = '';
     }
   }
   if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
@@ -827,8 +836,8 @@ function renderLager() {
       <td>${wine.hylde || ''}</td>
       <td class="text-right antal-cell"${lavtLager}><strong>${wine.antal || 0}</strong></td>
       <td class="text-right" data-status-cell="true">
-        <div class="${statusClass}" style="padding: 2px 5px; border-radius: 3px; display: inline-block;">
-          <span class="status-icon-${wine.vinId}">${statusIcon}</span>
+        <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center;">
+          <span class="status-icon-${wine.vinId}" style="font-size: 1.2em;">${statusIcon}</span>
           <input type="number" 
                  class="min-antal-input" 
                  value="${minAntal}" 
@@ -836,7 +845,7 @@ function renderLager() {
                  min="0"
                  style="width: 60px; text-align: right; border: 1px solid #ddd; padding: 2px 5px; background: white;">
         </div>
-        ${advarsel ? `<div style="color: red; font-size: 0.8em; margin-top: 2px;">${advarsel}</div>` : ''}
+        ${advarsel ? `<div style="color: red; font-size: 0.85em; margin-top: 4px; font-weight: bold;">${advarsel}</div>` : ''}
       </td>
       <td class="text-right">
         <input type="number" 
@@ -2871,8 +2880,55 @@ async function generateLavStatusRapport() {
       totalVærdi += (w.antal || 0) * (w.indkøbspris || 0);
     });
     
+    // Brug korrekt tidsstempel (klientens tid)
+    const now = new Date();
+    const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+    
     // Gem rapport i historik (uden at vise eller downloade PDF)
-    saveReportToHistory('OPTA-' + Date.now().toString().slice(-6), 'lager', wines.length, totalVærdi);
+    // Opret rapport objekt med korrekt tidsstempel
+    const report = {
+      reportId: Date.now().toString(),
+      date: dateStr, // Send korrekt tidsstempel
+      name: 'OPTA-' + Date.now().toString().slice(-6),
+      type: 'lager',
+      wineCount: wines.length,
+      totalValue: totalVærdi,
+      location: 'Lokal',
+      archived: false
+    };
+    
+    // Gem i backend
+    try {
+      await apiCall('/api/reports/save', {
+        method: 'POST',
+        body: JSON.stringify(report)
+      });
+      console.log('✅ Rapport gemt i backend');
+    } catch (error) {
+      console.error('Fejl ved gemning i backend:', error);
+    }
+    
+    // Gem også i localStorage som backup
+    const reportForLocalStorage = {
+      id: report.reportId,
+      date: dateStr,
+      name: report.name,
+      type: report.type,
+      wineCount: report.wineCount,
+      totalValue: report.totalValue,
+      location: report.location,
+      archived: report.archived
+    };
+    
+    reportsHistory.unshift(reportForLocalStorage);
+    if (reportsHistory.length > 100) {
+      reportsHistory = reportsHistory.slice(0, 100);
+    }
+    
+    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    showBackupStatus();
+    updateLocationFilter();
+    renderReportsTable();
     
     showSuccess('Rapport genereret og tilføjet til historik!');
   } catch (error) {
