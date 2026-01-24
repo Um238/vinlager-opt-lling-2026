@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v59
+// VINLAGER OPTÆLLING 2026 - APP.JS v60
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v59 - Fiks dashboard opdatering, PDF markeringer, tidsstempler, lavt lager');
+console.log('Version: v60 - Fiks tidsstempler timezone, scanner QR-kode');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -1997,15 +1997,37 @@ function formatDanskDato(dateStr) {
   if (!dateStr) return '';
   
   try {
-    // Håndter SQLite format: "2026-01-23 15:29:30"
+    // Håndter SQLite format: "2026-01-23 15:29:30" (gemt som localtime)
     if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+      // SQLite gemmer tid i localtime format, så vi skal parse det direkte
+      // Format: "YYYY-MM-DD HH:MM:SS" - dette er allerede lokal tid
+      const parts = dateStr.split(/[\s-:]/);
+      if (parts.length >= 5) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Måneder er 0-indexeret
+        const day = parseInt(parts[2], 10);
+        const hours = parseInt(parts[3], 10);
+        const minutes = parseInt(parts[4], 10);
+        
+        // Opret Date objekt med lokal tid (ikke UTC)
+        const date = new Date(year, month, day, hours, minutes);
+        if (!isNaN(date.getTime())) {
+          // Formatér til dansk: "23.01.2026 15:29"
+          const dayStr = String(date.getDate()).padStart(2, '0');
+          const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+          const yearStr = date.getFullYear();
+          const hoursStr = String(date.getHours()).padStart(2, '0');
+          const minutesStr = String(date.getMinutes()).padStart(2, '0');
+          return `${dayStr}.${monthStr}.${yearStr} ${hoursStr}:${minutesStr}`;
+        }
+      }
+      // Fallback: Prøv standard parsing
       let isoStr = dateStr;
       if (!dateStr.includes('T') && dateStr.includes(' ')) {
         isoStr = dateStr.replace(' ', 'T');
       }
       const date = new Date(isoStr);
       if (!isNaN(date.getTime())) {
-        // Formatér til dansk: "23.01.2026 15:29"
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
@@ -3906,40 +3928,81 @@ function generateScannerQR() {
   const qrContainer = document.getElementById('scanner-qr-code');
   const linkText = document.getElementById('scanner-link-text');
   
-  if (!qrContainer || !linkText) return;
+  if (!qrContainer) {
+    console.error('QR container ikke fundet!');
+    return;
+  }
+  
+  if (!linkText) {
+    console.error('Link text element ikke fundet!');
+  }
   
   // Få den fulde URL til scanner-siden
-  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+  // Brug window.location.href og fjern filnavn, tilføj scanner.html
+  let baseUrl = window.location.origin;
+  const pathParts = window.location.pathname.split('/').filter(p => p);
+  if (pathParts.length > 0) {
+    // Fjern sidste del (filnavn)
+    pathParts.pop();
+    if (pathParts.length > 0) {
+      baseUrl += '/' + pathParts.join('/') + '/';
+    } else {
+      baseUrl += '/';
+    }
+  } else {
+    baseUrl += '/';
+  }
   const scannerUrl = baseUrl + 'scanner.html';
   
+  console.log('📱 Genererer QR-kode for scanner:', scannerUrl);
+  
   // Vis link
-  linkText.textContent = scannerUrl;
+  if (linkText) {
+    linkText.textContent = scannerUrl;
+    linkText.style.wordBreak = 'break-all';
+  }
   
   // Generer QR-kode hvis QRCode biblioteket er tilgængelig
   if (typeof QRCode !== 'undefined') {
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, {
-      text: scannerUrl,
-      width: 200,
-      height: 200,
-      colorDark: '#000000',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.M
-    });
+    try {
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: scannerUrl,
+        width: 200,
+        height: 200,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 1
+      });
+      console.log('✅ QR-kode genereret');
+    } catch (error) {
+      console.error('Fejl ved generering af QR-kode:', error);
+      qrContainer.innerHTML = `
+        <div style="padding: 20px; text-align: center; border: 2px solid #f00;">
+          <p style="color: #c00;">Fejl ved generering af QR-kode</p>
+          <p style="font-size: 0.9em; color: #666; margin-top: 10px;">${scannerUrl}</p>
+          <p style="font-size: 0.8em; color: #999; margin-top: 5px;">Kopier linket og åbn det manuelt</p>
+        </div>
+      `;
+    }
   } else {
     // Fallback hvis QRCode ikke er indlæst
+    console.warn('⚠️ QRCode bibliotek ikke indlæst');
     qrContainer.innerHTML = `
-      <div style="padding: 20px; text-align: center;">
-        <p>QR-kode bibliotek indlæser...</p>
-        <p style="font-size: 0.9em; color: #666;">${scannerUrl}</p>
+      <div style="padding: 20px; text-align: center; border: 2px solid #f60;">
+        <p style="color: #f60;">QR-kode bibliotek indlæser...</p>
+        <p style="font-size: 0.9em; color: #666; margin-top: 10px; word-break: break-all;">${scannerUrl}</p>
+        <p style="font-size: 0.8em; color: #999; margin-top: 5px;">Kopier linket og åbn det manuelt hvis QR-koden ikke vises</p>
       </div>
     `;
     // Prøv igen efter lidt tid
     setTimeout(() => {
       if (typeof QRCode !== 'undefined') {
         generateScannerQR();
+      } else {
+        console.error('❌ QRCode bibliotek kunne ikke indlæses');
       }
-    }, 1000);
+    }, 2000);
   }
 }
 
