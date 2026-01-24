@@ -517,11 +517,18 @@
     
     async function apiCall(endpoint, options = {}) {
       const config = getConfig();
+      const url = `${config.API_URL}${endpoint}`;
+      console.log('🌐 API kald:', url);
+      
       const ms = config.TIMEOUT || 60000;
       const ac = new AbortController();
-      const tid = setTimeout(() => ac.abort(), ms);
+      const tid = setTimeout(() => {
+        console.error('⏱️ TIMEOUT:', url);
+        ac.abort();
+      }, ms);
+      
       try {
-        const response = await fetch(`${config.API_URL}${endpoint}`, {
+        const response = await fetch(url, {
           ...options,
           signal: ac.signal,
           headers: {
@@ -530,13 +537,49 @@
           }
         });
         clearTimeout(tid);
-        if (!response.ok) throw new Error(`API fejl: ${response.status}`);
-        return await response.json();
+        
+        console.log('📡 Response status:', response.status, url);
+        
+        if (!response.ok) {
+          const text = await response.text();
+          console.error('❌ API fejl:', response.status, text);
+          throw new Error(`API fejl ${response.status}: ${text.substring(0, 100)}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ API success:', url);
+        return data;
       } catch (e) {
         clearTimeout(tid);
-        if (e.name === 'AbortError') throw new Error('Backend svarer ikke (timeout). Prøv igen om 1 min.');
-        console.error('API fejl:', e);
+        if (e.name === 'AbortError') {
+          console.error('⏱️ TIMEOUT fejl:', url);
+          throw new Error('Backend svarer ikke (timeout). Prøv igen om 1 min.');
+        }
+        if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+          console.error('🌐 NETWORK fejl:', url, e);
+          throw new Error('Ingen forbindelse til backend. Tjek internet.');
+        }
+        console.error('❌ API fejl:', url, e);
         throw e;
+      }
+    }
+    
+    // Test backend forbindelse
+    async function testBackend() {
+      const config = getConfig();
+      console.log('🧪 Tester backend:', config.API_URL);
+      try {
+        const response = await fetch(`${config.API_URL}/api/locations`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        console.log('✅ Backend svarer:', response.status);
+        showStatus('Backend forbindelse OK', 'success');
+        return true;
+      } catch (e) {
+        console.error('❌ Backend svarer IKKE:', e);
+        showStatus('Ingen forbindelse til backend!', 'error');
+        return false;
       }
     }
     
@@ -1079,12 +1122,20 @@
     function startEverything() {
       console.log('🚀 Starter scanner...');
       
+      const config = getConfig();
+      console.log('⚙️ CONFIG:', config);
+      console.log('🌐 API URL:', config.API_URL);
+      
+      // Test backend først
+      testBackend();
+      
       // Hent lokationer
       loadLocations();
       
       // Start scanner - vent til jsQR er loaded
       function tryStartScanner() {
         if (typeof jsQR === 'undefined') {
+          console.log('⏳ Vent på jsQR...');
           setTimeout(tryStartScanner, 100);
           return;
         }
@@ -1095,7 +1146,7 @@
         });
       }
       
-      setTimeout(tryStartScanner, 300);
+      setTimeout(tryStartScanner, 500);
       
       // Enter key i modal
       const quantityInput = document.getElementById('quantity-input');
