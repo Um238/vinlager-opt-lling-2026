@@ -165,6 +165,7 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      background: #000;
     }
     
     .scan-overlay {
@@ -608,27 +609,37 @@
         }
       };
       
-      // Hent lokationer - BRUG apiCall
-      setTimeout(async () => {
+      // Hent lokationer - PRØV FLERE GANGE
+      async function fetchLocations() {
         try {
-          console.log('📍 Henter lokationer...');
-          const data = await apiCall('/api/locations');
-          console.log('📍 Data modtaget:', data);
+          const config = getConfig();
+          const url = `${config.API_URL}/api/locations`;
+          console.log('📍 Henter lokationer fra:', url);
           
-          if (!data) {
-            throw new Error('Ingen data modtaget');
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          console.log('📍 Response status:', response.status);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
           }
           
-          const list = Array.isArray(data) ? data : [];
-          console.log('📍 Lokationer fundet:', list.length);
+          const data = await response.json();
+          console.log('📍 Data modtaget:', data);
           
-          if (list.length === 0) {
-            selectedLocationId = null;
-            showStatus('Ingen lokationer i backend. Brug "Alle lokationer".', 'success');
+          if (!data || !Array.isArray(data)) {
+            throw new Error('Ugyldig data format');
+          }
+          
+          if (data.length === 0) {
+            showStatus('Ingen lokationer i backend', 'error');
             return;
           }
           
-          locations = list;
+          locations = data;
           select.innerHTML = '<option value="">Alle lokationer</option>';
           locations.forEach(loc => {
             const o = document.createElement('option');
@@ -637,19 +648,17 @@
             select.appendChild(o);
           });
           
-          if (locations.length === 1) {
-            select.value = locations[0].id;
-            selectedLocationId = locations[0].id;
-          }
-          
           console.log('✅ Lokationer indlæst:', locations.length);
-          showStatus(`✅ ${locations.length} lokationer indlæst`, 'success');
+          showStatus(`✅ ${locations.length} lokationer`, 'success');
         } catch (e) {
-          console.error('❌ Fejl ved hentning af lokationer:', e);
-          selectedLocationId = null;
-          showStatus('Kunne ikke hente lokationer: ' + e.message, 'error');
+          console.error('❌ Fejl:', e);
+          showStatus('Lokation fejl: ' + e.message, 'error');
+          // Prøv igen efter 3 sekunder
+          setTimeout(fetchLocations, 3000);
         }
-      }, 500);
+      }
+      
+      setTimeout(fetchLocations, 1000);
     }
     
     // Start QR scanner - HELT SIMPEL
@@ -686,11 +695,31 @@
         video.srcObject = stream;
         qrScanning = true;
         
+        // SIKRER VIDEO STARTER OG VISES
         video.onloadedmetadata = () => {
-          video.play().catch(err => console.error('Video play:', err));
+          console.log('Video metadata loaded');
+          video.play().then(() => {
+            console.log('✅ Video spiller');
+            showStatus('Scanner klar - pej på stregkode', 'success');
+          }).catch(err => {
+            console.error('Video play fejl:', err);
+            showStatus('Video fejl: ' + err.message, 'error');
+          });
         };
         
-        video.play().catch(() => {});
+        // Prøv at starte med det samme (hvis metadata allerede loaded)
+        if (video.readyState >= 2) {
+          video.play().then(() => {
+            console.log('✅ Video spiller (direkte)');
+            showStatus('Scanner klar - pej på stregkode', 'success');
+          }).catch(err => {
+            console.warn('Direkte play fejlede, venter på metadata');
+          });
+        }
+        
+        // Tving video til at vise sig
+        video.style.display = 'block';
+        video.style.visibility = 'visible';
         
         // Scan loop
         function scanFrame() {
@@ -1070,16 +1099,27 @@
     
     // closeScanner er allerede defineret ovenfor (før DOMContentLoaded)
     
-    // Vis status
+    // Vis status - SIKRER DEN VISES
     function showStatus(message, type) {
       const statusEl = document.getElementById('status-message');
+      if (!statusEl) {
+        console.error('Status element ikke fundet!');
+        return;
+      }
       statusEl.textContent = message;
       statusEl.className = `status-message status-${type}`;
       statusEl.style.display = 'block';
+      statusEl.style.visibility = 'visible';
+      statusEl.style.opacity = '1';
+      console.log('📢 Status:', message, type);
       
+      // Vis længere for fejl
+      const timeout = type === 'error' ? 8000 : 5000;
       setTimeout(() => {
-        statusEl.style.display = 'none';
-      }, 3000);
+        if (statusEl.textContent === message) {
+          statusEl.style.display = 'none';
+        }
+      }, timeout);
     }
     
     // Formatér tal
@@ -1090,26 +1130,34 @@
       return `${integerPart},${decimalPart}`;
     }
     
-    // Start ALT - SIMPEL
+    // Start ALT
     function startEverything() {
-      console.log('🚀 Starter...');
+      console.log('🚀 Starter scanner...');
       
       const config = getConfig();
-      console.log('🌐 API:', config.API_URL);
+      console.log('🌐 API URL:', config.API_URL);
+      showStatus('Starter...', 'success');
       
       // Hent lokationer
       loadLocations();
       
-      // Start scanner
+      // Start scanner - vent på jsQR
+      let attempts = 0;
       function tryStart() {
+        attempts++;
         if (typeof jsQR === 'undefined') {
-          setTimeout(tryStart, 200);
+          if (attempts < 20) {
+            setTimeout(tryStart, 200);
+          } else {
+            showStatus('Fejl: Scanner bibliotek ikke indlæst', 'error');
+          }
           return;
         }
+        console.log('✅ jsQR klar, starter kamera...');
         startQRScanner();
       }
       
-      setTimeout(tryStart, 1000);
+      setTimeout(tryStart, 500);
       
       // Enter key
       const input = document.getElementById('quantity-input');
@@ -1120,19 +1168,27 @@
       }
     }
     
-    // Start
+    // Start når DOM er klar
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', startEverything);
     } else {
       startEverything();
     }
     
+    // Også start når window er loaded
     window.addEventListener('load', () => {
-      if (!qrScanning && typeof jsQR !== 'undefined') {
-        setTimeout(() => {
-          if (!qrScanning) startQRScanner();
-        }, 1000);
-      }
+      setTimeout(() => {
+        if (!qrScanning) {
+          console.log('Window loaded - prøver at starte scanner...');
+          if (typeof jsQR !== 'undefined') {
+            startQRScanner();
+          }
+        }
+        // Prøv at hente lokationer igen
+        if (locations.length === 0) {
+          loadLocations();
+        }
+      }, 2000);
     });
   </script>
 </body>
