@@ -570,16 +570,25 @@
         try {
           const config = getConfig();
           const url = `${config.API_URL}/api/locations`;
+          console.log('📍 Henter lokationer fra:', url);
           const c = new AbortController();
-          t = setTimeout(() => c.abort(), 60000);
+          t = setTimeout(() => {
+            console.warn('📍 Timeout ved hentning af lokationer');
+            c.abort();
+          }, 60000);
           const response = await fetch(url, {
             signal: c.signal,
             headers: { 'Content-Type': 'application/json' }
           });
           clearTimeout(t);
-          if (!response.ok) throw new Error('API ' + response.status);
+          if (!response.ok) {
+            console.error('📍 API fejl:', response.status);
+            throw new Error('API ' + response.status);
+          }
           const data = await response.json();
+          console.log('📍 Data modtaget:', data);
           const list = Array.isArray(data) ? data : (data.locations || data.data || []);
+          console.log('📍 Lokationer fundet:', list.length);
           if (list.length === 0) {
             selectedLocationId = null;
             showStatus('Ingen lokationer i backend. Brug "Alle lokationer".', 'success');
@@ -597,10 +606,11 @@
             select.value = locations[0].id;
             selectedLocationId = locations[0].id;
           }
+          console.log('✅ Lokationer indlæst:', locations.length);
           showStatus('Lokationer indlæst', 'success');
         } catch (e) {
           if (t) clearTimeout(t);
-          console.error('Lokationer:', e);
+          console.error('❌ Fejl ved hentning af lokationer:', e);
           selectedLocationId = null;
           showStatus('Kunne ikke hente lokationer. Brug "Alle lokationer".', 'success');
         }
@@ -613,9 +623,24 @@
       const canvas = document.getElementById('qr-canvas');
       
       if (qrScanning) {
+        console.log('Scanner kører allerede');
         return;
       }
       
+      // Tjek at jsQR er indlæst
+      if (typeof jsQR === 'undefined') {
+        console.error('jsQR ikke indlæst! Vent lidt...');
+        setTimeout(() => {
+          if (typeof jsQR !== 'undefined') {
+            startQRScanner();
+          } else {
+            showStatus('Fejl: Scanner bibliotek ikke indlæst', 'error');
+          }
+        }, 500);
+        return;
+      }
+      
+      console.log('Starter kamera...');
       try {
         // Chrome kompatibilitet - prøv flere video constraints
         let stream = null;
@@ -641,12 +666,20 @@
         video.srcObject = stream;
         qrScanning = true;
         
+        // Start video med det samme
         video.onloadedmetadata = () => {
           video.play().catch(err => {
             console.error('Video play fejl:', err);
             showStatus('Kunne ikke starte video', 'error');
           });
         };
+        
+        // Prøv også at starte video direkte (hvis metadata allerede er loaded)
+        if (video.readyState >= 2) {
+          video.play().catch(err => {
+            console.warn('Direkte video play fejlede, venter på metadata:', err);
+          });
+        }
         
         // Scan loop
         function scanFrame() {
@@ -664,11 +697,20 @@
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            if (typeof jsQR !== 'undefined') {
+            if (typeof jsQR !== 'undefined' && typeof jsQR === 'function') {
               const code = jsQR(imageData.data, imageData.width, imageData.height);
               if (code && code.data) {
+                console.log('📷 Stregkode scannet:', code.data);
                 handleScan(code.data);
               }
+            } else if (typeof jsQR !== 'undefined') {
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
+              if (code && code.data) {
+                console.log('📷 Stregkode scannet:', code.data);
+                handleScan(code.data);
+              }
+            } else {
+              console.error('jsQR ikke tilgængelig!');
             }
           } catch (err) {
             console.error('Scan fejl:', err);
@@ -680,6 +722,7 @@
         }
         
         scanFrame();
+        console.log('✅ Scanner startet - scanFrame kører');
         showStatus('Scanner klar', 'success');
       } catch (error) {
         console.error('Kamera fejl:', error);
@@ -696,6 +739,8 @@
     
     // Håndter scan
     async function handleScan(codeData) {
+      if (!codeData || !codeData.trim()) return;
+      
       // Ignorer hvis modal allerede er åben
       const modal = document.getElementById('quantity-modal');
       if (modal && modal.classList.contains('show')) {
@@ -703,11 +748,11 @@
       }
       
       try {
-        currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData)}`);
+        currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData.trim())}`);
         showQuantityModal(currentWine, false);
       } catch (error) {
-        // Vin ikke fundet - vis modal alligevel
-        showQuantityModal({ vinId: codeData, navn: 'Ukendt vare' }, true);
+        console.warn('Vin ikke fundet for stregkode:', codeData, error);
+        showQuantityModal({ vinId: codeData.trim(), navn: 'Ukendt vare' }, true);
       }
     }
     
@@ -975,10 +1020,11 @@
           archived: false
         };
         
+        let reportTimeout;
         try {
           const config = getConfig();
           const ac = new AbortController();
-          const tid = setTimeout(() => ac.abort(), config.TIMEOUT || 60000);
+          reportTimeout = setTimeout(() => ac.abort(), config.TIMEOUT || 60000);
           console.log('💾 Gemmer rapport i backend:', reportData);
           const response = await fetch(`${config.API_URL}/api/reports/save`, {
             method: 'POST',
@@ -986,11 +1032,10 @@
             body: JSON.stringify(reportData),
             signal: ac.signal
           });
-          clearTimeout(tid);
+          clearTimeout(reportTimeout);
           if (response.ok) {
             const result = await response.json();
             console.log('✅ Rapport gemt i backend:', result);
-            // Fjern localStorage flag - vi bruger backend nu
             localStorage.removeItem('newReportAvailable');
             localStorage.removeItem('newReportId');
           } else {
@@ -999,7 +1044,7 @@
             throw new Error(`Backend fejl: ${response.status}`);
           }
         } catch (error) {
-          clearTimeout(tid);
+          if (reportTimeout) clearTimeout(reportTimeout);
           console.error('❌ Fejl ved gemning i backend:', error);
           alert('⚠️ Advarsel: Rapport kunne ikke gemmes i backend. Den er kun gemt lokalt på telefonen.');
         }
@@ -1047,16 +1092,28 @@
     function initializeScanner() {
       console.log('Initialiserer scanner...');
       
-      setTimeout(() => {
-        if (typeof startQRScanner === 'function') {
-          startQRScanner().catch(err => {
-            console.error('Fejl ved start af scanner:', err);
-            showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
-          });
-        }
-      }, 100);
+      // Start scanner MED DET SAMME - ikke vent
+      if (typeof startQRScanner === 'function') {
+        startQRScanner().catch(err => {
+          console.error('Fejl ved start af scanner:', err);
+          showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
+        });
+      } else {
+        console.error('startQRScanner ikke defineret!');
+        setTimeout(() => {
+          if (typeof startQRScanner === 'function') {
+            startQRScanner().catch(err => {
+              console.error('Fejl ved start af scanner:', err);
+              showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
+            });
+          }
+        }, 200);
+      }
       
-      if (typeof loadLocations === 'function') loadLocations();
+      // Hent lokationer i baggrunden (ikke blokerende)
+      if (typeof loadLocations === 'function') {
+        loadLocations();
+      }
       
       // Enter key i modal
       const quantityInput = document.getElementById('quantity-input');
@@ -1071,18 +1128,13 @@
       }
     }
     
-    // Start når DOM er klar
+    // Start scanner MED DET SAMME når DOM er klar
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(initializeScanner, 100);
-      });
+      document.addEventListener('DOMContentLoaded', initializeScanner);
     } else {
       // DOM er allerede loaded - start med det samme
-      setTimeout(initializeScanner, 100);
+      initializeScanner();
     }
-    
-    // START SCANNER OGSÅ HVIS DOMContentLoaded ALLEREDE ER KØRT
-    // (Dette håndteres i DOMContentLoaded event handler)
   </script>
 </body>
 </html>
