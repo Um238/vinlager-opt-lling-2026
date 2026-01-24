@@ -191,6 +191,12 @@
       const url = `${config.API_URL}${endpoint}`;
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), config.TIMEOUT || 60000);
+      
+      console.log(`🌐 API kald: ${options.method || 'GET'} ${url}`);
+      if (options.body) {
+        console.log(`📦 Request body:`, options.body);
+      }
+      
       try {
         const response = await fetch(url, {
           ...options,
@@ -198,10 +204,21 @@
           headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
         });
         clearTimeout(tid);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
+        
+        console.log(`📥 Response status: ${response.status} ${response.statusText}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ API fejl ${response.status}:`, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
+        }
+        
+        const data = await response.json();
+        console.log(`✅ API success:`, data);
+        return data;
       } catch (e) {
         clearTimeout(tid);
+        console.error(`❌ API exception:`, e.message);
         throw e;
       }
     }
@@ -367,36 +384,68 @@
     async function saveQuantity() {
       const input = document.getElementById('quantity-input');
       const quantity = parseInt(input.value) || 0;
-      if (!currentWine) {
+      
+      if (!currentWine || !currentWine.vinId) {
+        alert('Ingen vin valgt!');
         closeModal();
         return;
       }
       
+      console.log(`💾 Gemmer antal for ${currentWine.vinId}: ${quantity}`);
+      
       try {
-        if (currentWine.vinId && !currentWine.navn.includes('Ukendt')) {
-          // KRITISK FIX: Send nytAntal som tal, ikke string
-          const response = await apiCall(`/api/count/${currentWine.vinId}`, {
-            method: 'POST',
-            body: JSON.stringify({
-              nytAntal: parseInt(quantity) || 0,
+        // KRITISK FIX: GEM ALTID data til backend, uanset om vinen findes eller ej
+        if (currentWine.vinId) {
+          try {
+            const requestBody = {
+              nytAntal: quantity,
               locationId: selectedLocationId ? parseInt(selectedLocationId) : null
-            })
-          });
-          console.log('✅ Antal opdateret i backend:', response);
+            };
+            
+            console.log(`📤 Sender til backend: /api/count/${currentWine.vinId}`, requestBody);
+            
+            // KRITISK FIX: Send nytAntal som tal, ikke string
+            const response = await apiCall(`/api/count/${currentWine.vinId}`, {
+              method: 'POST',
+              body: JSON.stringify(requestBody)
+            });
+            
+            console.log('✅ Backend respons:', response);
+            
+            // Opdater currentWine med det nye antal fra backend
+            if (response && response.nytAntal !== undefined) {
+              currentWine.antal = response.nytAntal;
+              console.log(`✅ Antal opdateret i backend til: ${response.nytAntal}`);
+            } else {
+              // Hvis backend ikke returnerer nytAntal, brug det vi sendte
+              currentWine.antal = quantity;
+              console.log(`✅ Brugt sendt antal: ${quantity}`);
+            }
+          } catch (apiError) {
+            console.error('❌ Fejl ved API kald:', apiError);
+            console.error('❌ Fejl detaljer:', apiError.message, apiError.stack);
+            // Hvis API fejler, gem stadig lokalt for rapporten
+            console.warn('⚠️ API fejlede, gemmer lokalt for rapporten');
+            currentWine.antal = quantity;
+            // Vis ikke alert - forstyrrer scanning
+          }
         }
         
         const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
         scannedWines.set(currentWine.vinId, {
           ...currentWine,
-          antal: parseInt(quantity) || 0,
+          antal: currentWine.antal || quantity,
           locationId: selectedLocationId ? parseInt(selectedLocationId) : null,
           locationName: locName
         });
         
+        console.log(`✅ Gemt i scannedWines: ${currentWine.vinId}, antal: ${currentWine.antal || quantity}, total scannet: ${scannedWines.size}`);
+        
         // Ingen status-besked - forstyrrer scanning
         closeModal();
       } catch (error) {
-        console.error('❌ Fejl ved gemning af antal:', error.message);
+        console.error('❌ KRITISK FEJL ved gemning af antal:', error);
+        console.error('❌ Fejl stack:', error.stack);
         alert(`Fejl: ${error.message}`);
       }
     }
