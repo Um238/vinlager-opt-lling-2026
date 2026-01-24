@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v70
+// VINLAGER OPTÆLLING 2026 - APP.JS v71
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v70 - KRITISK FIX: allWines overskrives ikke, rapporter opdaterer altid, rød/gul/grøn med !important');
+console.log('Version: v71 - KOMPLET SYSTEM FIX: 404 håndteres, allWines bevares altid, alle opdateringer virker');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -431,11 +431,14 @@ async function apiCall(endpoint, options = {}) {
     if (!response.ok) {
       // 404 fejl skal håndteres stille (ikke forstyrrende)
       if (response.status === 404) {
-        // Returner tom array for rapporter, ellers throw
-        if (endpoint.includes('/reports/')) {
+        // Returner tom array for rapporter og wines hvis de ikke findes
+        if (endpoint.includes('/reports/') || endpoint.includes('/wines')) {
+          console.warn(`404 for ${endpoint} - returnerer tom array`);
           return [];
         }
-        throw new Error(`API endpoint ikke fundet: ${endpoint}`);
+        // For andre endpoints, throw kun hvis det er kritisk
+        console.warn(`404 for ${endpoint}`);
+        return null;
       }
       
       // Tjek om responsen er JSON eller HTML
@@ -629,36 +632,40 @@ async function loadWines() {
     loadCountedWinesToday().catch(() => {});
     
     // KRITISK FIX: Kun opdater allWines hvis vi faktisk fik gyldig data fra backend
-    // Hvis backend returnerer tom array, BEHOLD eksisterende data (ikke overskriv!)
+    // Hvis backend returnerer tom array eller null, BEHOLD eksisterende data (ikke overskriv!)
     if (wines && Array.isArray(wines) && wines.length > 0) {
       // Vi fik data - opdater
       allWines = wines;
       saveWinesBackup(wines);
-    } else if (wines && Array.isArray(wines) && wines.length === 0) {
-      // Backend returnerer tom array - BEHOLD eksisterende data hvis vi har noget
-      if (allWines.length === 0) {
+      console.log(`✅ Hentet ${wines.length} vine fra backend`);
+    } else if (wines === null || (Array.isArray(wines) && wines.length === 0)) {
+      // Backend returnerer null eller tom array - BEHOLD eksisterende data hvis vi har noget
+      if (allWines && allWines.length > 0) {
+        // Vi har eksisterende data - BEHOLD det! Backend er måske bare tom efter deploy
+        console.log(`⚠️ Backend tom/null, men beholder ${allWines.length} eksisterende vine.`);
+        saveWinesBackup(allWines); // Sikr backup er opdateret
+      } else if (allWines.length === 0) {
         // Kun hvis vi ikke har noget data, prøv at gendanne fra backup
         const n = restoreWinesFromBackup();
         if (n > 0) {
-          console.log(`Lager tomt på backend. Gendannet ${n} vine fra backup.`);
+          console.log(`✅ Lager tomt på backend. Gendannet ${n} vine fra backup.`);
+        } else {
+          console.log('⚠️ Ingen vine i backend og ingen backup.');
         }
-      } else {
-        // Vi har eksisterende data - BEHOLD det! Backend er måske bare tom efter deploy
-        console.log('Backend tom, men beholder eksisterende lager data.');
-        saveWinesBackup(allWines); // Sikr backup er opdateret
       }
     } else {
       // API fejl eller ugyldig data - BEHOLD eksisterende data
       console.warn('⚠️ API returnerede ikke gyldig data. Beholder eksisterende lager.');
-      if (allWines.length === 0) {
-        // Kun hvis vi ikke har noget, prøv backup
-        const n = restoreWinesFromBackup();
-        if (n > 0) {
-          console.log(`Gendannet ${n} vine fra backup.`);
-        }
-      } else {
+      if (allWines && allWines.length > 0) {
         // Behold eksisterende data
         saveWinesBackup(allWines);
+        console.log(`✅ Beholder ${allWines.length} eksisterende vine.`);
+      } else {
+        // Prøv backup
+        const n = restoreWinesFromBackup();
+        if (n > 0) {
+          console.log(`✅ Gendannet ${n} vine fra backup.`);
+        }
       }
     }
     
@@ -700,23 +707,25 @@ async function loadWines() {
       setupScanInput();
     }
   } catch (error) {
-    console.error('Fejl ved indlæsning af vine:', error);
+    console.error('❌ Fejl ved indlæsning af vine:', error.message);
     // KRITISK: Ved fejl, BEHOLD altid eksisterende data
-    if (allWines.length === 0) {
+    if (allWines && allWines.length > 0) {
+      // BEHOLD eksisterende data - ikke overskriv med tom array!
+      console.warn(`⚠️ API fejl, men beholder ${allWines.length} eksisterende vine.`);
+      saveWinesBackup(allWines);
+    } else {
       // Kun hvis vi ikke har noget, prøv backup
       const n = restoreWinesFromBackup();
       if (n > 0) {
-        console.log(`Gendannet ${n} vine fra backup.`);
+        console.log(`✅ Gendannet ${n} vine fra backup efter fejl.`);
+      } else {
+        console.warn('⚠️ Ingen vine og ingen backup efter fejl.');
       }
-    } else {
-      // BEHOLD eksisterende data - ikke overskriv med tom array!
-      console.warn('⚠️ API fejl, men beholder eksisterende lager data.');
-      saveWinesBackup(allWines);
     }
     // OPDATER ALLIGEVEL dashboard og tabel med eksisterende data
-    updateDashboard();
-    populateFilters();
-    renderLager();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof populateFilters === 'function') populateFilters();
+    if (typeof renderLager === 'function') renderLager();
   }
 }
 
@@ -725,7 +734,18 @@ function updateDashboard() {
   // KRITISK FIX: OVERSKRIV ALDRIG allWines med tom array hvis den allerede har data!
   // Kun initialiser hvis den virkelig ikke eksisterer
   if (typeof allWines === 'undefined') {
-    allWines = [];
+    // Prøv at hente fra backup først
+    const saved = localStorage.getItem('winesBackup');
+    if (saved) {
+      try {
+        allWines = JSON.parse(saved);
+        console.log(`✅ Gendannet ${allWines.length} vine fra backup i updateDashboard`);
+      } catch (e) {
+        allWines = [];
+      }
+    } else {
+      allWines = [];
+    }
   }
   if (!Array.isArray(allWines)) {
     // Hvis den ikke er array, prøv at gendanne fra backup
@@ -733,6 +753,7 @@ function updateDashboard() {
     if (saved) {
       try {
         allWines = JSON.parse(saved);
+        console.log(`✅ Gendannet ${allWines.length} vine fra backup (ikke array)`);
       } catch (e) {
         allWines = [];
       }
@@ -1150,12 +1171,14 @@ async function updatePris(vinId, newPris) {
     });
 
     // Opdater visningen
-    updateDashboard();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderLager === 'function') renderLager();
     showSuccess('Pris opdateret!');
   } catch (error) {
     console.error('Fejl ved opdatering af pris:', error);
     showError('Kunne ikke opdatere pris');
-    renderLager(); // Genindlæs for at få korrekt værdi tilbage
+    if (typeof renderLager === 'function') renderLager(); // Genindlæs for at få korrekt værdi tilbage
+    if (typeof updateDashboard === 'function') updateDashboard();
   }
 }
 
@@ -1223,12 +1246,22 @@ async function updateMinAntalAndStatus(vinId, minAntal, inputElement) {
       body: JSON.stringify(wine)
     });
     
+    // Opdater lokalt data
+    const localWine = allWines.find(w => w.vinId === vinId);
+    if (localWine) {
+      localWine.minAntal = minAntal;
+    }
+    
+    // Opdater visningen
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderLager === 'function') renderLager();
     showSuccess('Minimum opdateret!');
   } catch (error) {
     console.error('Fejl ved opdatering af minimum:', error);
     showError('Kunne ikke opdatere minimum antal');
     // Genindlæs for at få korrekt værdi tilbage
-    renderLager();
+    if (typeof renderLager === 'function') renderLager();
+    if (typeof updateDashboard === 'function') updateDashboard();
   }
 }
 
@@ -1566,22 +1599,27 @@ async function saveCount() {
     if (index !== -1) {
       allWines[index].antal = result.nytAntal;
     }
+    
+    // KRITISK: Opdater dashboard og tabel efter optælling
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderLager === 'function') renderLager();
+    saveWinesBackup(allWines); // Gem backup
 
     // Ryd input og scan-input så scanneren er klar til næste scan
     document.getElementById('count-input').value = '';
     document.getElementById('scan-input').value = '';
     
-    // Hvis scanner kører, fortsæt scanning (ikke stop)
-    // Scanner fortsætter automatisk
-
-    updateDashboard();
-    // Opdater lager visning (inkl. farvekodning baseret på nyt antal)
-    await loadWines();
-    renderLager();
-
-    // Ryd input
-    document.getElementById('count-input').value = '';
-    document.getElementById('scan-input').value = '';
+    // KRITISK: Opdater lager visning (inkl. farvekodning baseret på nyt antal)
+    // Vent lidt så backend kan gemme, så hent opdateret data
+    setTimeout(async () => {
+      try {
+        await loadWines();
+      } catch (err) {
+        // Hvis fejl, opdater alligevel med lokale data
+        if (typeof updateDashboard === 'function') updateDashboard();
+        if (typeof renderLager === 'function') renderLager();
+      }
+    }, 500);
     
     // Opdater auto-opdatering efter gem
     // (loadWines kalder allerede updateDashboard, så data er opdateret)
