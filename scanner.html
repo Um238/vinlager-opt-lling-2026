@@ -381,11 +381,7 @@
     </div>
     
     <div class="video-container" id="video-container">
-      <div id="start-camera-wrap" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111;z-index:5;">
-        <p style="color:#fff;margin-bottom:16px;font-size:1rem;">Tillad kamera og tryk for at starte scanning</p>
-        <button type="button" id="start-camera-btn" style="padding:16px 32px;font-size:1.1em;font-weight:600;background:#4CAF50;color:#fff;border:none;border-radius:8px;cursor:pointer;">📷 Start kamera</button>
-      </div>
-      <video id="qr-video" autoplay playsinline muted style="display:none;"></video>
+      <video id="qr-video" autoplay playsinline muted></video>
       <canvas id="qr-canvas" style="display: none;"></canvas>
       <div class="scan-overlay"></div>
     </div>
@@ -570,66 +566,45 @@
       };
       
       setTimeout(async () => {
+        let t;
         try {
           const config = getConfig();
-          const ms = 60000;
-          const c1 = new AbortController();
-          const t1 = setTimeout(() => c1.abort(), ms);
-          let response;
-          try {
-            response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
-              signal: c1.signal,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          } catch (e1) {
-            clearTimeout(t1);
-            throw e1;
-          }
-          clearTimeout(t1);
-          if (!response.ok) throw new Error(`API fejl: ${response.status}`);
-          locations = await response.json();
-          if (!locations || locations.length === 0) {
-            const c2 = new AbortController();
-            const t2 = setTimeout(() => c2.abort(), ms);
-            try {
-              const r2 = await fetch(`${config.API_URL}/api/locations`, {
-                signal: c2.signal,
-                headers: { 'Content-Type': 'application/json' }
-              });
-              clearTimeout(t2);
-              if (r2.ok) locations = await r2.json();
-            } catch (e2) {
-              clearTimeout(t2);
-            }
-          }
-          if (!locations || locations.length === 0) {
+          const url = `${config.API_URL}/api/locations`;
+          const c = new AbortController();
+          t = setTimeout(() => c.abort(), 60000);
+          const response = await fetch(url, {
+            signal: c.signal,
+            headers: { 'Content-Type': 'application/json' }
+          });
+          clearTimeout(t);
+          if (!response.ok) throw new Error('API ' + response.status);
+          const data = await response.json();
+          const list = Array.isArray(data) ? data : (data.locations || data.data || []);
+          if (list.length === 0) {
             selectedLocationId = null;
+            showStatus('Ingen lokationer i backend. Brug "Alle lokationer".', 'success');
             return;
           }
-          
-          // Opdater select med lokationer
+          locations = list;
           select.innerHTML = '<option value="">Alle lokationer</option>';
           locations.forEach(loc => {
-            const option = document.createElement('option');
-            option.value = loc.id;
-            option.textContent = loc.name;
-            select.appendChild(option);
+            const o = document.createElement('option');
+            o.value = loc.id;
+            o.textContent = loc.name || ('Lokation ' + loc.id);
+            select.appendChild(o);
           });
-          
-          // Hvis der kun er én lokation, vælg den automatisk
           if (locations.length === 1) {
             select.value = locations[0].id;
             selectedLocationId = locations[0].id;
           }
-          
-          showStatus('✅ Lokationer indlæst', 'success');
-        } catch (error) {
-          console.error('Fejl ved hentning af lokationer:', error);
-          // FALLBACK: Scanneren kan stadig bruges med "Alle lokationer"
-          // select er allerede sat til "Alle lokationer" ovenfor
+          showStatus('Lokationer indlæst', 'success');
+        } catch (e) {
+          if (t) clearTimeout(t);
+          console.error('Lokationer:', e);
           selectedLocationId = null;
+          showStatus('Kunne ikke hente lokationer. Brug "Alle lokationer".', 'success');
         }
-      }, 100); // Start efter 100ms (ikke blokerende)
+      }, 100);
     }
     
     // Start QR scanner
@@ -1072,22 +1047,14 @@
     function initializeScanner() {
       console.log('Initialiserer scanner...');
       
-      const startBtn = document.getElementById('start-camera-btn');
-      if (startBtn) {
-        startBtn.onclick = () => {
-          if (typeof startQRScanner !== 'function') return;
-          startBtn.disabled = true;
-          startBtn.textContent = 'Starter...';
-          startQRScanner().then(() => {
-            showStatus('Scanner klar', 'success');
-          }).catch(err => {
+      setTimeout(() => {
+        if (typeof startQRScanner === 'function') {
+          startQRScanner().catch(err => {
             console.error('Fejl ved start af scanner:', err);
-            startBtn.disabled = false;
-            startBtn.textContent = '📷 Start kamera';
             showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
           });
-        };
-      }
+        }
+      }, 100);
       
       if (typeof loadLocations === 'function') loadLocations();
       
