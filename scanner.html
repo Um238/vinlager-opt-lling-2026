@@ -137,6 +137,11 @@
       touch-action: manipulation;
       z-index: 20;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      color: #4CAF50 !important;
+    }
+    
+    .scanner-close-btn:hover {
+      background: rgba(255,255,255,1);
     }
     
     @media (max-width: 768px) {
@@ -362,7 +367,7 @@
 <body>
   <div class="scanner-container">
     <div class="scanner-header">
-      <button class="scanner-close-btn" onclick="if(window.closeScanner){window.closeScanner();}else{window.location.href='index.html';}">✕ Luk</button>
+      <a href="index.html" class="scanner-close-btn" style="text-decoration: none; display: inline-block; text-align: center; line-height: 1.2;" onclick="event.preventDefault(); if(window.closeScanner){window.closeScanner();}else{window.location.href='index.html';}">✕ Luk</a>
       <div class="scanner-header-content">
         <h1>🍷 Vinlager Scanner</h1>
         <div class="location-selector">
@@ -370,7 +375,7 @@
           <select id="location-select">
             <option value="">Alle lokationer</option>
           </select>
-          <button onclick="if(window.closeScanner){window.closeScanner();}else{window.location.href='index.html';}" style="margin-left: 10px; padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9em;">Tilbage</button>
+          <a href="index.html" onclick="event.preventDefault(); try{if(window.closeScanner){window.closeScanner();}else{window.location.href='index.html';}}catch(e){window.location.href='index.html';}" style="margin-left: 10px; padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9em; text-decoration: none; display: inline-block;">Tilbage</a>
         </div>
         <div id="status-message" class="status-message" style="display: none;"></div>
       </div>
@@ -433,39 +438,62 @@
       
       // Stop scanning
       try {
-        if (scanAnimationFrame) {
+        if (typeof scanAnimationFrame !== 'undefined' && scanAnimationFrame) {
           cancelAnimationFrame(scanAnimationFrame);
           scanAnimationFrame = null;
         }
-        if (qrStream) {
+        if (typeof qrStream !== 'undefined' && qrStream) {
           qrStream.getTracks().forEach(track => track.stop());
           qrStream = null;
         }
-        qrScanning = false;
+        if (typeof qrScanning !== 'undefined') {
+          qrScanning = false;
+        }
       } catch (e) {
         console.warn('Fejl ved stop af scanner:', e);
       }
       
       // Naviger tilbage - FORSØG FLERE METODER
-      try {
+      // Metode 1: href (mest pålidelig)
+      if (window.location) {
         window.location.href = 'index.html';
-      } catch (e1) {
-        try {
-          window.location.replace('index.html');
-        } catch (e2) {
-          try {
-            window.open('index.html', '_self');
-          } catch (e3) {
-            try {
-              window.location.assign('index.html');
-            } catch (e4) {
-              console.error('Alle navigation metoder fejlede');
-              alert('Kunne ikke navigere. Prøv at lukke browseren og åbne programmet igen.');
-            }
-          }
-        }
+        return;
+      }
+      
+      // Metode 2: replace
+      try {
+        window.location.replace('index.html');
+        return;
+      } catch (e2) {
+        // Fortsæt til næste metode
+      }
+      
+      // Metode 3: open
+      try {
+        window.open('index.html', '_self');
+        return;
+      } catch (e3) {
+        // Fortsæt til næste metode
+      }
+      
+      // Metode 4: assign
+      try {
+        window.location.assign('index.html');
+        return;
+      } catch (e4) {
+        console.error('Alle navigation metoder fejlede');
+        alert('Kunne ikke navigere. Prøv at lukke browseren og åbne programmet igen.');
       }
     };
+    
+    // Eksponer også som global funktion (udenfor window objekt)
+    function closeScanner() {
+      if (window.closeScanner) {
+        window.closeScanner();
+      } else {
+        window.location.href = 'index.html';
+      }
+    }
     
     // Helper funktion til at få CONFIG
     function getConfig() {
@@ -505,7 +533,7 @@
       }
     }
     
-    // Hent lokationer - med timeout og fejlhåndtering
+    // Hent lokationer - HELT IKKE-BLOKERENDE
     async function loadLocations() {
       const select = document.getElementById('location-select');
       if (!select) {
@@ -517,72 +545,71 @@
       select.innerHTML = '<option value="">Alle lokationer</option>';
       selectedLocationId = null;
       
-      try {
-        // Tilføj timeout til API kald - KORT timeout
-        const config = getConfig();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          console.warn('Timeout ved hentning af lokationer');
-        }, 3000); // 3 sekunder timeout
-        
-        const response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
-          signal: controller.signal,
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`API fejl: ${response.status}`);
-        }
-        
-        locations = await response.json();
-        
-        if (!locations || locations.length === 0) {
-          // Ingen lokationer - brug "Alle lokationer" som standard
-          selectedLocationId = null;
-          showStatus('ℹ️ Ingen lokationer fundet - bruger "Alle lokationer"', 'success');
-          return;
-        }
-        
-        // Opdater select med lokationer
-        select.innerHTML = '<option value="">Alle lokationer</option>';
-        locations.forEach(loc => {
-          const option = document.createElement('option');
-          option.value = loc.id;
-          option.textContent = loc.name;
-          select.appendChild(option);
-        });
-        
-        // Hvis der kun er én lokation, vælg den automatisk
-        if (locations.length === 1) {
-          select.value = locations[0].id;
-          selectedLocationId = locations[0].id;
-        }
-        
-        // Lyt til ændringer (kun én gang)
-        select.onchange = (e) => {
-          selectedLocationId = e.target.value ? parseInt(e.target.value) : null;
-          if (selectedLocationId) {
-            const loc = locations.find(l => l.id === selectedLocationId);
-            if (loc) {
-              showStatus(`📍 Lokation: ${loc.name}`, 'success');
-            }
-          } else {
-            showStatus('ℹ️ Alle lokationer', 'success');
+      // Setup change handler med det samme
+      select.onchange = (e) => {
+        selectedLocationId = e.target.value ? parseInt(e.target.value) : null;
+        if (selectedLocationId) {
+          const loc = locations.find(l => l.id === selectedLocationId);
+          if (loc) {
+            showStatus(`📍 Lokation: ${loc.name}`, 'success');
           }
-        };
-        
-        showStatus('✅ Lokationer indlæst', 'success');
-      } catch (error) {
-        console.error('Fejl ved hentning af lokationer:', error);
-        // FALLBACK: Scanneren kan stadig bruges med "Alle lokationer"
-        select.innerHTML = '<option value="">Alle lokationer</option>';
-        selectedLocationId = null;
-        showStatus('⚠️ Kunne ikke hente lokationer - bruger "Alle lokationer"', 'error');
-        // Scanneren kan stadig bruges!
-      }
+        } else {
+          showStatus('ℹ️ Alle lokationer', 'success');
+        }
+      };
+      
+      // Hent lokationer i baggrunden - MED KORT TIMEOUT
+      setTimeout(async () => {
+        try {
+          const config = getConfig();
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            controller.abort();
+            console.warn('Timeout ved hentning af lokationer - bruger fallback');
+          }, 2000); // KUN 2 sekunder timeout
+          
+          const response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`API fejl: ${response.status}`);
+          }
+          
+          locations = await response.json();
+          
+          if (!locations || locations.length === 0) {
+            // Ingen lokationer - brug "Alle lokationer" som standard
+            selectedLocationId = null;
+            return;
+          }
+          
+          // Opdater select med lokationer
+          select.innerHTML = '<option value="">Alle lokationer</option>';
+          locations.forEach(loc => {
+            const option = document.createElement('option');
+            option.value = loc.id;
+            option.textContent = loc.name;
+            select.appendChild(option);
+          });
+          
+          // Hvis der kun er én lokation, vælg den automatisk
+          if (locations.length === 1) {
+            select.value = locations[0].id;
+            selectedLocationId = locations[0].id;
+          }
+          
+          showStatus('✅ Lokationer indlæst', 'success');
+        } catch (error) {
+          console.error('Fejl ved hentning af lokationer:', error);
+          // FALLBACK: Scanneren kan stadig bruges med "Alle lokationer"
+          // select er allerede sat til "Alle lokationer" ovenfor
+          selectedLocationId = null;
+        }
+      }, 100); // Start efter 100ms (ikke blokerende)
     }
     
     // Start QR scanner
@@ -1023,41 +1050,62 @@
       return `${integerPart},${decimalPart}`;
     }
     
-    // Start scanner når siden loader
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('DOM loaded - starter indlæsning');
+    // Start scanner når siden loader - START MED DET SAMME
+    function initializeScanner() {
+      console.log('Initialiserer scanner...');
+      console.log('closeScanner tilgængelig:', typeof window.closeScanner);
       
-      // Start scanner MED DET SAMME - ikke vent på lokationer
+      // START SCANNER MED DET SAMME - IKKE VENT
+      console.log('Starter QR scanner MED DET SAMME...');
+      
+      // Vent lidt så alle funktioner er defineret
       setTimeout(() => {
-        console.log('Starter QR scanner...');
-        startQRScanner().catch(err => {
-          console.error('Fejl ved start af scanner:', err);
-          showStatus('⚠️ Scanner kunne ikke startes. Tjek kamera tilladelser.', 'error');
-        });
-      }, 500); // Start efter 0.5 sekund
+        if (typeof startQRScanner === 'function') {
+          startQRScanner().catch(err => {
+            console.error('Fejl ved start af scanner:', err);
+            const statusEl = document.getElementById('status-message');
+            if (statusEl) {
+              statusEl.textContent = '⚠️ Scanner kunne ikke startes. Tjek kamera tilladelser.';
+              statusEl.className = 'status-message status-error';
+              statusEl.style.display = 'block';
+            }
+          });
+        } else {
+          console.error('startQRScanner ikke defineret endnu!');
+          setTimeout(initializeScanner, 200);
+        }
+      }, 100);
       
-      // Hent lokationer i baggrunden (ikke blokerende) - med timeout
-      Promise.race([
-        loadLocations(),
-        new Promise(resolve => setTimeout(resolve, 3000)) // Max 3 sekunder
-      ]).catch(err => {
-        console.error('Fejl ved loadLocations:', err);
-        // Scanneren kører allerede, så det er OK
-      });
+      // Hent lokationer i baggrunden (IKKE BLOKERENDE)
+      if (typeof loadLocations === 'function') {
+        loadLocations();
+      }
       
       // Enter key i modal
       const quantityInput = document.getElementById('quantity-input');
       if (quantityInput) {
         quantityInput.addEventListener('keypress', (e) => {
           if (e.key === 'Enter') {
-            saveQuantity();
+            if (typeof saveQuantity === 'function') {
+              saveQuantity();
+            }
           }
         });
       }
-      
-      // Sikre at closeScanner virker
-      console.log('closeScanner tilgængelig:', typeof window.closeScanner);
-    });
+    }
+    
+    // Start når DOM er klar
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initializeScanner, 100);
+      });
+    } else {
+      // DOM er allerede loaded - start med det samme
+      setTimeout(initializeScanner, 100);
+    }
+    
+    // START SCANNER OGSÅ HVIS DOMContentLoaded ALLEREDE ER KØRT
+    // (Dette håndteres i DOMContentLoaded event handler)
   </script>
 </body>
 </html>
