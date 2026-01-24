@@ -75,10 +75,13 @@ exports.saveReport = (req, res) => {
     return res.status(400).json({ error: 'Manglende påkrævede felter' });
   }
   
+  // Brug klientens tid hvis den er sendt med, ellers brug server tid
+  const clientDate = req.body.date || new Date().toISOString().replace('T', ' ').substring(0, 19);
+  
   db.run(
     `INSERT OR REPLACE INTO reports (reportId, name, type, wineCount, totalValue, location, archived, created)
-     VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now', 'localtime'))`,
-    [reportId, name, type, wineCount || 0, totalValue || 0, location || 'Lokal'],
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+    [reportId, name, type, wineCount || 0, totalValue || 0, location || 'Lokal', clientDate],
     function(err) {
       if (err) {
         console.error('Fejl ved gemning af rapport:', err);
