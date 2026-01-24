@@ -2639,9 +2639,12 @@ async function generateFullReportPDF(report) {
     console.log('📄 Genererer fuld PDF for rapport:', report);
     
     // Hent vine-data fra backend (samme som mobil scanneren gjorde)
-    console.log('🔍 Henter vine-data fra backend...');
+    console.log('🔍 Henter opdateret vine-data fra backend...');
     const wines = await apiCall('/api/reports/lager');
     console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
+    if (wines && wines.length > 0) {
+      console.log('📊 Første vin i data:', wines[0]);
+    }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
       console.warn('⚠️ Ingen vine-data fundet!');

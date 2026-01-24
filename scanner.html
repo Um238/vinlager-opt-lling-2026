@@ -235,6 +235,7 @@
       
       select.onchange = (e) => {
         selectedLocationId = e.target.value ? parseInt(e.target.value) : null;
+        console.log('📍 Lokation valgt:', selectedLocationId, e.target.value ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer');
       };
       
       setTimeout(async () => {
@@ -397,9 +398,16 @@
         // KRITISK FIX: GEM ALTID data til backend, uanset om vinen findes eller ej
         if (currentWine.vinId) {
           try {
+            // KRITISK FIX: Hvis ingen lokation er valgt, brug første tilgængelige lokation
+            let finalLocationId = selectedLocationId ? parseInt(selectedLocationId) : null;
+            if (!finalLocationId && locations.length > 0) {
+              finalLocationId = locations[0].id;
+              console.log(`⚠️ Ingen lokation valgt, bruger første tilgængelige: ${finalLocationId} (${locations[0].name})`);
+            }
+            
             const requestBody = {
               nytAntal: quantity,
-              locationId: selectedLocationId ? parseInt(selectedLocationId) : null
+              locationId: finalLocationId
             };
             
             console.log(`📤 Sender til backend: /api/count/${currentWine.vinId}`, requestBody);
@@ -431,11 +439,13 @@
           }
         }
         
-        const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
+        // Brug samme locationId som blev sendt til backend
+        const finalLocationId = selectedLocationId ? parseInt(selectedLocationId) : (locations.length > 0 ? locations[0].id : null);
+        const locName = finalLocationId ? locations.find(l => l.id === finalLocationId)?.name : 'Ikke valgt';
         scannedWines.set(currentWine.vinId, {
           ...currentWine,
           antal: currentWine.antal || quantity,
-          locationId: selectedLocationId ? parseInt(selectedLocationId) : null,
+          locationId: finalLocationId,
           locationName: locName
         });
         
