@@ -374,27 +374,30 @@
       
       try {
         if (currentWine.vinId && !currentWine.navn.includes('Ukendt')) {
-          await apiCall(`/api/count/${currentWine.vinId}`, {
+          // KRITISK FIX: Send nytAntal som tal, ikke string
+          const response = await apiCall(`/api/count/${currentWine.vinId}`, {
             method: 'POST',
             body: JSON.stringify({
-              nytAntal: quantity,
-              locationId: selectedLocationId
+              nytAntal: parseInt(quantity) || 0,
+              locationId: selectedLocationId ? parseInt(selectedLocationId) : null
             })
           });
+          console.log('✅ Antal opdateret i backend:', response);
         }
         
         const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
         scannedWines.set(currentWine.vinId, {
           ...currentWine,
-          antal: quantity,
-          locationId: selectedLocationId,
+          antal: parseInt(quantity) || 0,
+          locationId: selectedLocationId ? parseInt(selectedLocationId) : null,
           locationName: locName
         });
         
         // Ingen status-besked - forstyrrer scanning
         closeModal();
       } catch (error) {
-        console.error('Fejl:', error.message);
+        console.error('❌ Fejl ved gemning af antal:', error.message);
+        alert(`Fejl: ${error.message}`);
       }
     }
 

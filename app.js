@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v74
+// VINLAGER OPTÆLLING 2026 - APP.JS v75
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v74 - KRITISK FIX: Rød/gul/grøn baseret på minAntal, lavt lager vises korrekt, alle opdateringer virker');
+console.log('Version: v75 - KRITISK FIX: Scanning gemmer korrekt, antal opdateres, rapporter viser korrekt data');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -93,7 +93,7 @@ function startAutoUpdate() {
       // Tjek for ny rapport fra mobil
       checkForNewReport();
     }
-  }, 3000); // 3 sekunder - mere aggressivt for at fange opdateringer fra mobil
+  }, 5000); // 5 sekunder - giv backend tid til at gemme data fra mobil scanning
   
   console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
 }
@@ -630,7 +630,9 @@ function downloadLagerBackupCSV() {
 
 async function loadWines() {
   try {
+    console.log('🔄 Henter vine fra backend...');
     const wines = await apiCall('/api/wines');
+    console.log('📦 Modtaget fra backend:', wines ? wines.length : 0, 'vine');
     
     // Hent optalte vine i dag (ikke blokerende)
     loadCountedWinesToday().catch(() => {});
@@ -639,6 +641,11 @@ async function loadWines() {
     // MEN: Hvis backend returnerer tom array, BEHOLD kun eksisterende data hvis vi har noget
     if (wines && Array.isArray(wines) && wines.length > 0) {
       // Vi fik data - OPDATER ALTID (dette sikrer at opdateringer fra mobil vises!)
+      // KRITISK: Konverter antal til tal for at sikre korrekt sammenligning
+      wines.forEach(w => {
+        w.antal = parseInt(w.antal) || 0;
+        w.minAntal = parseInt(w.minAntal) || 24;
+      });
       allWines = wines;
       saveWinesBackup(wines);
       console.log(`✅ Hentet ${wines.length} vine fra backend - OPDATERET allWines`);
@@ -2100,7 +2107,7 @@ function checkForNewReport() {
         }
       });
     }
-  }, 3000); // Vent 3 sekunder for at backend kan gemme
+  }, 5000); // Vent 5 sekunder for at backend kan gemme data fra mobil scanning
   
   // Fjern flag hvis det er sat
   if (localStorage.getItem('newReportAvailable') === 'true') {
