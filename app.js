@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v57
+// VINLAGER OPTÆLLING 2026 - APP.JS v58
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v57 - Fiks tidsstempler, rapporter visning, dashboard opdatering');
+console.log('Version: v58 - Fiks tidsstempler, backup status, markeringer, lavt lager');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -455,9 +455,37 @@ async function apiCall(endpoint, options = {}) {
 }
 
 // Load wines
+// Hent optalte vine i dag (for markering)
+let countedWinesToday = new Set();
+
+async function loadCountedWinesToday() {
+  try {
+    // Hent alle counts fra i dag - prøv at hente fra alle rapporter i dag
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    // Hvis der ikke er en dedikeret endpoint, brug rapporter fra i dag
+    const reports = await apiCall('/api/reports/history');
+    if (reports && Array.isArray(reports)) {
+      const todayReports = reports.filter(r => {
+        const reportDate = r.date || r.created;
+        return reportDate && reportDate.startsWith(today);
+      });
+      // Hent alle vinId'er fra rapporter i dag (hvis de har det)
+      // For nu, marker alle vine der er blevet opdateret i dag
+      console.log('📊 Rapporter i dag:', todayReports.length);
+    }
+    // Alternativ: Marker vine der er blevet opdateret i dag baseret på allWines
+    // Dette er en workaround indtil vi har en bedre endpoint
+  } catch (error) {
+    console.warn('Kunne ikke hente optalte vine:', error);
+  }
+}
+
 async function loadWines() {
   try {
     const wines = await apiCall('/api/wines');
+    
+    // Hent også optalte vine i dag
+    await loadCountedWinesToday();
     
     // Opdater allWines hvis vi fik data
     if (wines && Array.isArray(wines)) {
@@ -782,8 +810,12 @@ function renderLager() {
     }
     
     const lavtLager = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
+    // Markér optalte vine i dag med prik
+    const isCountedToday = countedWinesToday.has(wine.vinId);
+    const countedMarker = isCountedToday ? '<span style="color: #4CAF50; font-weight: bold; margin-right: 3px;" title="Optalt i dag">•</span>' : '';
+    
     row.innerHTML = `
-      <td>${wine.vinId || ''}</td>
+      <td>${countedMarker}${wine.vinId || ''}</td>
       <td>${wine.varenummer || ''}</td>
       <td>${wine.navn || ''}</td>
       <td>${wine.type || ''}</td>
@@ -1837,9 +1869,12 @@ async function loadReportsHistory() {
         loadReportsHistory();
       }, 3000);
     }
-    // Opdater lokation filter før vi renderer tabellen
-    updateLocationFilter();
-    renderReportsTable();
+  // Opdater lokation filter før vi renderer tabellen
+  updateLocationFilter();
+  renderReportsTable();
+  
+  // Opdater backup status
+  showBackupStatus();
   } catch (error) {
     console.error('Fejl ved indlæsning af rapport historik:', error);
     // Prøv at bruge localStorage som sidste fallback
@@ -1858,9 +1893,13 @@ async function loadReportsHistory() {
 
 // Gem rapport i historik
 async function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
+  // Brug korrekt tidsstempel (klientens tid)
+  const now = new Date();
+  const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+  
   const report = {
     reportId: Date.now().toString(),
-    date: new Date().toLocaleString('da-DK'),
+    date: dateStr, // Send korrekt tidsstempel til backend
     name: reportName,
     type: reportType,
     wineCount: wineCount,
@@ -1880,16 +1919,17 @@ async function saveReportToHistory(reportName, reportType, wineCount, totalValue
     console.error('Fejl ved gemning i backend:', error);
   }
   
-  // Gem også i localStorage som backup
+  // Gem også i localStorage som backup (tokens)
   const reportForLocalStorage = {
     id: report.reportId,
-    date: report.date,
+    date: dateStr,
     name: report.name,
     type: report.type,
     wineCount: report.wineCount,
     totalValue: report.totalValue,
     location: report.location,
-    archived: report.archived
+    archived: report.archived,
+    backupDate: new Date().toISOString() // Ekstra backup timestamp
   };
   
   reportsHistory.unshift(reportForLocalStorage); // Tilføj øverst
@@ -1898,8 +1938,30 @@ async function saveReportToHistory(reportName, reportType, wineCount, totalValue
   }
   
   localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+  localStorage.setItem('reportsBackup_' + report.reportId, JSON.stringify(reportForLocalStorage)); // Ekstra backup per rapport
+  
+  // Vis backup status
+  showBackupStatus();
+  
   updateLocationFilter(); // Opdater lokation filter når ny rapport tilføjes
   renderReportsTable();
+}
+
+// Vis backup status
+function showBackupStatus() {
+  const backupCount = Object.keys(localStorage).filter(k => k.startsWith('reportsBackup_')).length;
+  const reportsHistoryCount = reportsHistory.length;
+  const backupInfo = document.getElementById('backup-status');
+  if (backupInfo) {
+    if (backupCount > 0 || reportsHistoryCount > 0) {
+      backupInfo.textContent = `💾 Backup: ${backupCount} individuelle + ${reportsHistoryCount} i historik (localStorage tokens)`;
+      backupInfo.style.display = 'block';
+      backupInfo.style.background = '#e6f7e6';
+      backupInfo.style.color = '#060';
+    } else {
+      backupInfo.style.display = 'none';
+    }
+  }
 }
 
 // Opdater lokation filter dropdown

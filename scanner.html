@@ -848,9 +848,13 @@
         
         const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer';
         
+        // Brug korrekt tidsstempel (klientens tid i ISO format)
+        const now = new Date();
+        const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+        
         const reportData = {
           reportId: Date.now().toString(),
-          date: new Date().toLocaleString('da-DK'),
+          date: dateStr, // Send korrekt tidsstempel til backend
           name: 'OPTÆLLING-' + Date.now().toString().slice(-6),
           type: 'lager',
           wineCount: grandTotalWineCount,
