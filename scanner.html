@@ -380,8 +380,12 @@
       </div>
     </div>
     
-    <div class="video-container">
-      <video id="qr-video" autoplay playsinline muted></video>
+    <div class="video-container" id="video-container">
+      <div id="start-camera-wrap" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111;z-index:5;">
+        <p style="color:#fff;margin-bottom:16px;font-size:1rem;">Tillad kamera og tryk for at starte scanning</p>
+        <button type="button" id="start-camera-btn" style="padding:16px 32px;font-size:1.1em;font-weight:600;background:#4CAF50;color:#fff;border:none;border-radius:8px;cursor:pointer;">📷 Start kamera</button>
+      </div>
+      <video id="qr-video" autoplay playsinline muted style="display:none;"></video>
       <canvas id="qr-canvas" style="display: none;"></canvas>
       <div class="scan-overlay"></div>
     </div>
@@ -411,7 +415,7 @@
     </div>
   </div>
 
-  <script src="config.js?v=36"></script>
+  <script src="config.js?v=37"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
@@ -505,30 +509,38 @@
       }
       return {
         API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
-        TIMEOUT: 10000
+        TIMEOUT: 60000
       };
     }
     
-    // API call
+    function toLocalDateTimeString(d) {
+      d = d || new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    
     async function apiCall(endpoint, options = {}) {
       const config = getConfig();
+      const ms = config.TIMEOUT || 60000;
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), ms);
       try {
         const response = await fetch(`${config.API_URL}${endpoint}`, {
           ...options,
+          signal: ac.signal,
           headers: {
             'Content-Type': 'application/json',
-            ...options.headers
+            ...(options.headers || {})
           }
         });
-        
-        if (!response.ok) {
-          throw new Error(`API fejl: ${response.status}`);
-        }
-        
+        clearTimeout(tid);
+        if (!response.ok) throw new Error(`API fejl: ${response.status}`);
         return await response.json();
-      } catch (error) {
-        console.error('API fejl:', error);
-        throw error;
+      } catch (e) {
+        clearTimeout(tid);
+        if (e.name === 'AbortError') throw new Error('Backend svarer ikke (timeout). Prøv igen om 1 min.');
+        console.error('API fejl:', e);
+        throw e;
       }
     }
     
@@ -557,46 +569,39 @@
         }
       };
       
-      // Hent lokationer i baggrunden - MED KORT TIMEOUT
       setTimeout(async () => {
         try {
           const config = getConfig();
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => {
-            controller.abort();
-            console.warn('Timeout ved hentning af lokationer - bruger fallback');
-          }, 2000); // KUN 2 sekunder timeout
-          
-          let response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
-            signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            throw new Error(`API fejl: ${response.status}`);
+          const ms = 60000;
+          const c1 = new AbortController();
+          const t1 = setTimeout(() => c1.abort(), ms);
+          let response;
+          try {
+            response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
+              signal: c1.signal,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } catch (e1) {
+            clearTimeout(t1);
+            throw e1;
           }
-          
+          clearTimeout(t1);
+          if (!response.ok) throw new Error(`API fejl: ${response.status}`);
           locations = await response.json();
-          
           if (!locations || locations.length === 0) {
             const c2 = new AbortController();
-            const t2 = setTimeout(() => c2.abort(), 2000);
+            const t2 = setTimeout(() => c2.abort(), ms);
             try {
               const r2 = await fetch(`${config.API_URL}/api/locations`, {
                 signal: c2.signal,
                 headers: { 'Content-Type': 'application/json' }
               });
               clearTimeout(t2);
-              if (r2.ok) {
-                locations = await r2.json();
-              }
+              if (r2.ok) locations = await r2.json();
             } catch (e2) {
               clearTimeout(t2);
             }
           }
-          
           if (!locations || locations.length === 0) {
             selectedLocationId = null;
             return;
@@ -982,10 +987,7 @@
         doc.text('=======================================', 14, y);
         
         const locationName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer';
-        
-        // Brug korrekt tidsstempel (klientens tid i ISO format)
-        const now = new Date();
-        const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+        const dateStr = toLocalDateTimeString();
         
         const reportData = {
           reportId: Date.now().toString(),
@@ -998,17 +1000,18 @@
           archived: false
         };
         
-        // Gem rapport i backend
         try {
           const config = getConfig();
+          const ac = new AbortController();
+          const tid = setTimeout(() => ac.abort(), config.TIMEOUT || 60000);
           console.log('💾 Gemmer rapport i backend:', reportData);
           const response = await fetch(`${config.API_URL}/api/reports/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(reportData),
-            signal: AbortSignal.timeout(config.TIMEOUT || 15000)
+            signal: ac.signal
           });
-          
+          clearTimeout(tid);
           if (response.ok) {
             const result = await response.json();
             console.log('✅ Rapport gemt i backend:', result);
@@ -1021,6 +1024,7 @@
             throw new Error(`Backend fejl: ${response.status}`);
           }
         } catch (error) {
+          clearTimeout(tid);
           console.error('❌ Fejl ved gemning i backend:', error);
           alert('⚠️ Advarsel: Rapport kunne ikke gemmes i backend. Den er kun gemt lokalt på telefonen.');
         }
@@ -1065,36 +1069,27 @@
       return `${integerPart},${decimalPart}`;
     }
     
-    // Start scanner når siden loader - START MED DET SAMME
     function initializeScanner() {
       console.log('Initialiserer scanner...');
-      console.log('closeScanner tilgængelig:', typeof window.closeScanner);
       
-      // START SCANNER MED DET SAMME - IKKE VENT
-      console.log('Starter QR scanner MED DET SAMME...');
-      
-      // Vent lidt så alle funktioner er defineret
-      setTimeout(() => {
-        if (typeof startQRScanner === 'function') {
-          startQRScanner().catch(err => {
+      const startBtn = document.getElementById('start-camera-btn');
+      if (startBtn) {
+        startBtn.onclick = () => {
+          if (typeof startQRScanner !== 'function') return;
+          startBtn.disabled = true;
+          startBtn.textContent = 'Starter...';
+          startQRScanner().then(() => {
+            showStatus('Scanner klar', 'success');
+          }).catch(err => {
             console.error('Fejl ved start af scanner:', err);
-            const statusEl = document.getElementById('status-message');
-            if (statusEl) {
-              statusEl.textContent = '⚠️ Scanner kunne ikke startes. Tjek kamera tilladelser.';
-              statusEl.className = 'status-message status-error';
-              statusEl.style.display = 'block';
-            }
+            startBtn.disabled = false;
+            startBtn.textContent = '📷 Start kamera';
+            showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
           });
-        } else {
-          console.error('startQRScanner ikke defineret endnu!');
-          setTimeout(initializeScanner, 200);
-        }
-      }, 100);
-      
-      // Hent lokationer i baggrunden (IKKE BLOKERENDE)
-      if (typeof loadLocations === 'function') {
-        loadLocations();
+        };
       }
+      
+      if (typeof loadLocations === 'function') loadLocations();
       
       // Enter key i modal
       const quantityInput = document.getElementById('quantity-input');

@@ -4,7 +4,7 @@
   'use strict';
   window.CONFIG = {
     API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
-    TIMEOUT: 10000
+    TIMEOUT: 60000
   };
   // Sæt også global CONFIG for kompatibilitet
   if (typeof CONFIG === 'undefined') {

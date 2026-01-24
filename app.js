@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v63
+// VINLAGER OPTÆLLING 2026 - APP.JS v64
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v63 - Backup/gendan lager, fjern Tilbage, lokationer fallback');
+console.log('Version: v64 - Klokke lokal tid, 60s timeout, backup rapporter, Start kamera');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -396,20 +396,31 @@ function showPage(pageId) {
   }
 }
 
-// API calls
+// Lokal tid som YYYY-MM-DD HH:MM:SS (Danmark) – ikke UTC
+function toLocalDateTimeString(d) {
+  d = d || new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// API calls – 60s timeout for Render cold start
 async function apiCall(endpoint, options = {}) {
-  // Sikr at CONFIG er tilgængelig
   const config = getConfig();
   if (!config || !config.API_URL) {
     console.error('❌ CONFIG er ikke defineret!');
     throw new Error('Backend konfiguration mangler');
   }
+  const ms = options.timeout ?? config.TIMEOUT ?? 60000;
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), ms);
   try {
+    const { signal: _s, timeout: _t, ...rest } = options;
     const response = await fetch(`${config.API_URL}${endpoint}`, {
-      ...options,
+      ...rest,
+      signal: ac.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers
+        ...(rest.headers || {})
       }
     });
 
@@ -448,9 +459,14 @@ async function apiCall(endpoint, options = {}) {
       return text;
     }
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Backend svarer ikke (timeout). Render cold start? Prøv igen om 1 minut.');
+    }
     console.error('API fejl:', error);
     console.error('Endpoint:', endpoint);
     throw error;
+  } finally {
+    clearTimeout(tid);
   }
 }
 
@@ -531,6 +547,36 @@ function gendanLagerFraBackup() {
   }
   if (n > 0) showSuccess(`${n} vine gendannet fra backup.`);
   else showError('Ingen lager-backup fundet.');
+}
+
+function hentRapporterFraBackup() {
+  const saved = localStorage.getItem('reportsHistory');
+  if (!saved) {
+    showError('Ingen rapporter i backup. Gem en rapport først.');
+    const msg = document.getElementById('backup-actions-msg');
+    if (msg) {
+      msg.textContent = 'Ingen rapporter i backup.';
+      msg.style.color = '#c00';
+      setTimeout(() => { msg.textContent = ''; }, 5000);
+    }
+    return;
+  }
+  try {
+    reportsHistory = JSON.parse(saved);
+    updateLocationFilter();
+    renderReportsTable();
+    showBackupStatus();
+    showSuccess(`${reportsHistory.length} rapporter hentet fra backup.`);
+    const msg = document.getElementById('backup-actions-msg');
+    if (msg) {
+      msg.textContent = `✅ ${reportsHistory.length} rapporter hentet fra backup.`;
+      msg.style.color = '#060';
+      setTimeout(() => { msg.textContent = ''; }, 6000);
+    }
+  } catch (e) {
+    showError('Kunne ikke læse backup.');
+    console.error(e);
+  }
 }
 
 function downloadLagerBackupCSV() {
@@ -1959,10 +2005,18 @@ async function loadReportsHistory() {
           console.warn('⚠️ Ingen rapporter fundet i backend!');
         }
       } else {
-        // Hvis backend returnerer tom array, brug den alligevel (så vi ikke bruger gammel localStorage data)
-        reportsHistory = [];
-        localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
-        console.log('✅ Backend returnerede tom liste - nulstiller rapporter');
+        // Backend tom (fx efter deploy) – brug localStorage backup i stedet for at overskrive
+        const saved = localStorage.getItem('reportsHistory');
+        if (saved) {
+          try {
+            reportsHistory = JSON.parse(saved);
+            console.log('⚠️ Backend tom – bruger localStorage backup:', reportsHistory.length, 'rapporter');
+          } catch (e) {
+            reportsHistory = [];
+          }
+        } else {
+          reportsHistory = [];
+        }
       }
     } catch (backendError) {
       console.error('❌ Fejl ved hentning fra backend:', backendError);
@@ -2009,9 +2063,7 @@ async function loadReportsHistory() {
 
 // Gem rapport i historik
 async function saveReportToHistory(reportName, reportType, wineCount, totalValue) {
-  // Brug korrekt tidsstempel (klientens tid)
-  const now = new Date();
-  const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+  const dateStr = toLocalDateTimeString(); // Lokal tid – ikke UTC
   
   const report = {
     reportId: Date.now().toString(),
@@ -2996,15 +3048,11 @@ async function generateLavStatusRapport() {
       totalVærdi += (w.antal || 0) * (w.indkøbspris || 0);
     });
     
-    // Brug korrekt tidsstempel (klientens tid)
-    const now = new Date();
-    const dateStr = now.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+    const dateStr = toLocalDateTimeString();
     
-    // Gem rapport i historik (uden at vise eller downloade PDF)
-    // Opret rapport objekt med korrekt tidsstempel
     const report = {
       reportId: Date.now().toString(),
-      date: dateStr, // Send korrekt tidsstempel
+      date: dateStr,
       name: 'OPTA-' + Date.now().toString().slice(-6),
       type: 'lager',
       wineCount: wines.length,
@@ -4051,6 +4099,7 @@ async function finishCounting() {
   window.generateVærdiReportDownload = generateVærdiReportDownload;
   window.gendanLagerFraBackup = gendanLagerFraBackup;
   window.downloadLagerBackupCSV = downloadLagerBackupCSV;
+  window.hentRapporterFraBackup = hentRapporterFraBackup;
   window.restoreWinesFromBackup = restoreWinesFromBackup;
   window.switchAdminTab = switchAdminTab;
   window.handleCreateUser = handleCreateUser;
