@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v65
+// VINLAGER OPTÆLLING 2026 - APP.JS v66
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v65 - Opdatering efter scanning, low stock warnings, dashboard popup');
+console.log('Version: v66 - Fjernet status-bjælke, fixet rød/gul/grøn, sikret opdateringer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -1005,7 +1005,7 @@ function renderLager() {
       <td${lavtLagerStyle}>${wine.hylde || ''}</td>
       <td class="text-right antal-cell"${lavtLagerStyle}>${antalBold}${wine.antal || 0}${antalBoldEnd}</td>
       <td class="text-right" data-status-cell="true">
-        <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center;">
+        <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center; ${statusClass === 'status-red' ? 'background-color: #fee; color: #c00;' : statusClass === 'status-orange' ? 'background-color: #ffe4cc; color: #f60;' : statusClass === 'status-green' ? 'background-color: #e6f7e6; color: #060;' : ''}">
           <span class="status-icon-${wine.vinId}" style="font-size: 1.2em;">${statusIcon}</span>
           <input type="number" 
                  class="min-antal-input" 
@@ -1947,16 +1947,17 @@ function checkForNewReport() {
   setTimeout(() => {
     if (typeof loadWines === 'function') {
       loadWines().then(() => {
-        // Sikr at dashboard og tabel opdateres
-        updateDashboard();
-        renderLager();
-      }).catch(() => {
+        // SIKR at dashboard og tabel opdateres
+        if (typeof updateDashboard === 'function') updateDashboard();
+        if (typeof renderLager === 'function') renderLager();
+      }).catch((err) => {
+        console.error('Fejl ved opdatering:', err);
         // Hvis fejl, prøv alligevel at opdatere med eksisterende data
-        updateDashboard();
-        renderLager();
+        if (typeof updateDashboard === 'function') updateDashboard();
+        if (typeof renderLager === 'function') renderLager();
       });
     }
-  }, 2000); // Vent 2 sekunder for at backend kan gemme
+  }, 1500); // Vent 1.5 sekunder for at backend kan gemme
   
   // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
   const newReportAvailable = localStorage.getItem('newReportAvailable');

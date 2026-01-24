@@ -40,13 +40,6 @@
       flex: 1; padding: 8px; font-size: 0.9em; border: 2px solid #4CAF50;
       border-radius: 6px; background: white; color: #333;
     }
-    #status-message {
-      text-align: center; padding: 8px; margin: 8px 0;
-      border-radius: 8px; font-size: 0.9em; font-weight: 600;
-      display: none;
-    }
-    .status-success { background: #4CAF50; color: white; }
-    .status-error { background: #f44336; color: white; }
     .video-container {
       flex: 1; position: relative; overflow: hidden; background: #000;
     }
@@ -114,7 +107,6 @@
           <option value="">Alle lokationer</option>
         </select>
       </div>
-      <div id="status-message" class="status-message"></div>
     </div>
     <div class="video-container">
       <video id="qr-video" autoplay playsinline muted></video>
@@ -214,17 +206,7 @@
       }
     }
 
-    // STATUS
-    function showStatus(msg, type) {
-      const el = document.getElementById('status-message');
-      if (!el) return;
-      el.textContent = msg;
-      el.className = `status-message status-${type}`;
-      el.style.display = 'block';
-      setTimeout(() => {
-        if (el.textContent === msg) el.style.display = 'none';
-      }, type === 'error' ? 8000 : 5000);
-    }
+    // STATUS - FJERNET - ingen status-besked der forstyrrer
 
     // HENT LOKATIONER
     async function loadLocations() {
@@ -254,7 +236,7 @@
             o.textContent = loc.name;
             select.appendChild(o);
           });
-          showStatus(`${data.length} lokationer`, 'success');
+             // Fjernet status-besked for at undgå forstyrrelse
         } catch (e) {}
       }, 1000);
     }
@@ -302,11 +284,11 @@
           if (qrScanning) scanAnimationFrame = requestAnimationFrame(scanFrame);
         }
         
-        scanFrame();
-        showStatus('Scanner klar', 'success');
+          scanFrame();
+          // Scanner starter automatisk - ingen status-besked nødvendig
       } catch (error) {
         qrScanning = false;
-        showStatus('Kamera fejl: ' + error.message, 'error');
+        console.error('Kamera fejl:', error.message);
       }
     }
 
@@ -390,10 +372,11 @@
           locationName: locName
         });
         
-        showStatus(`✅ ${currentWine.navn || currentWine.vinId}: ${quantity}`, 'success');
+          // Vis kun kort bekræftelse - ikke for længe
+          setTimeout(() => showStatus(`✅ ${currentWine.navn || currentWine.vinId}: ${quantity}`, 'success'), 100);
         closeModal();
       } catch (error) {
-        showStatus('Fejl: ' + error.message, 'error');
+        console.error('Fejl:', error.message);
       }
     }
 
@@ -407,7 +390,7 @@
       }
       
       try {
-        showStatus('Genererer rapport...', 'success');
+        // Ingen status-besked - forstyrrer ikke
         
         if (qrStream) {
           qrStream.getTracks().forEach(t => t.stop());
@@ -489,14 +472,14 @@
         }
         
         doc.save('lagerrapport_optælling.pdf');
-        showStatus('Rapport genereret!', 'success');
+          // Rapport genereret - vises i alert
         
         setTimeout(() => {
           alert(`Optælling afsluttet! ${grandCount} vine, ${grandTotal.toFixed(2)} kr.`);
           window.location.href = 'index.html';
         }, 1000);
       } catch (error) {
-        showStatus('Fejl: ' + error.message, 'error');
+        console.error('Fejl:', error.message);
       }
     }
 
@@ -515,7 +498,7 @@
               startQRScanner();
             } else if (tries > 30) {
               clearInterval(check);
-              showStatus('Scanner bibliotek ikke indlæst', 'error');
+              console.error('Scanner bibliotek ikke indlæst');
             }
           }, 200);
         }
