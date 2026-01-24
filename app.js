@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v69
+// VINLAGER OPTÆLLING 2026 - APP.JS v70
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v69 - KOMPLET SYSTEM FIX: Varelager bevares, rapporter virker, tabel opdaterer, rød/gul/grøn virker, dashboard virker');
+console.log('Version: v70 - KRITISK FIX: allWines overskrives ikke, rapporter opdaterer altid, rød/gul/grøn med !important');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -722,10 +722,25 @@ async function loadWines() {
 
 // Dashboard
 function updateDashboard() {
-  // SIKR at allWines er defineret
-  if (!allWines || !Array.isArray(allWines)) {
+  // KRITISK FIX: OVERSKRIV ALDRIG allWines med tom array hvis den allerede har data!
+  // Kun initialiser hvis den virkelig ikke eksisterer
+  if (typeof allWines === 'undefined') {
     allWines = [];
   }
+  if (!Array.isArray(allWines)) {
+    // Hvis den ikke er array, prøv at gendanne fra backup
+    const saved = localStorage.getItem('winesBackup');
+    if (saved) {
+      try {
+        allWines = JSON.parse(saved);
+      } catch (e) {
+        allWines = [];
+      }
+    } else {
+      allWines = [];
+    }
+  }
+  // Hvis allWines allerede er en array (tom eller med data), BEHOLD den!
   
   const antVine = allWines.length;
   // Beregn lavt lager korrekt - tjek både antal og minAntal
@@ -1042,7 +1057,7 @@ function renderLager() {
       <td${lavtLagerStyle}>${wine.hylde || ''}</td>
       <td class="text-right antal-cell"${lavtLagerStyle}>${antalBold}${wine.antal || 0}${antalBoldEnd}</td>
       <td class="text-right" data-status-cell="true">
-        <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center; ${statusClass === 'status-red' ? 'background-color: #fee; color: #c00;' : statusClass === 'status-orange' ? 'background-color: #ffe4cc; color: #f60;' : statusClass === 'status-green' ? 'background-color: #e6f7e6; color: #060;' : ''}">
+        <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center; ${statusClass === 'status-red' ? 'background-color: #fee !important; color: #c00 !important;' : statusClass === 'status-orange' ? 'background-color: #ffe4cc !important; color: #f60 !important;' : statusClass === 'status-green' ? 'background-color: #e6f7e6 !important; color: #060 !important;' : ''}">
           <span class="status-icon-${wine.vinId}" style="font-size: 1.2em;">${statusIcon}</span>
           <input type="number" 
                  class="min-antal-input" 
@@ -2076,19 +2091,21 @@ async function loadReportsHistory() {
       } else {
         reportsHistory = [];
       }
-      // Prøv at hente fra backend igen efter 5 sekunder (kun hvis vi ikke har backup)
-      if (reportsHistory.length === 0) {
-        setTimeout(() => {
-          loadReportsHistory();
-        }, 5000);
-      }
+      // FJERNET: Stop med at hente hele tiden
     }
-  // Opdater lokation filter før vi renderer tabellen
-  updateLocationFilter();
-  renderReportsTable();
-  
-  // Opdater backup status
-  showBackupStatus();
+    
+    // KRITISK: ALTID opdater tabel uanset hvad
+    if (typeof updateLocationFilter === 'function') {
+      updateLocationFilter();
+    }
+    if (typeof renderReportsTable === 'function') {
+      renderReportsTable();
+    }
+    
+    // Opdater backup status
+    if (typeof showBackupStatus === 'function') {
+      showBackupStatus();
+    }
   } catch (error) {
     console.error('Fejl ved indlæsning af rapport historik:', error);
     // Prøv at bruge localStorage som sidste fallback
@@ -2096,8 +2113,12 @@ async function loadReportsHistory() {
     if (saved) {
       try {
         reportsHistory = JSON.parse(saved);
-        updateLocationFilter();
-        renderReportsTable();
+        if (typeof updateLocationFilter === 'function') {
+          updateLocationFilter();
+        }
+        if (typeof renderReportsTable === 'function') {
+          renderReportsTable();
+        }
       } catch (parseError) {
         console.error('Fejl ved parsing af localStorage:', parseError);
       }
