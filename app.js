@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v64
+// VINLAGER OPTÆLLING 2026 - APP.JS v65
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v64 - Klokke lokal tid, 60s timeout, backup rapporter, Start kamera');
+console.log('Version: v65 - Opdatering efter scanning, low stock warnings, dashboard popup');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -64,28 +64,32 @@ function startAutoUpdate() {
     clearInterval(autoUpdateInterval);
   }
   
-  // Start nyt interval - opdater hver 5 sekunder
+  // Start nyt interval - opdater hver 3 sekunder
   autoUpdateInterval = setInterval(() => {
-    // Opdater kun hvis brugeren er logget ind og ikke er i scanner mode
     if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
-      // OPDATER ALTID LAGER DATA - så dashboard opdateres efter scanning
+      // OPDATER ALTID LAGER DATA - så dashboard og tabel opdateres efter scanning
       if (typeof loadWines === 'function') {
-        loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
+        loadWines().then(() => {
+          // Sikr at dashboard og tabel opdateres
+          updateDashboard();
+          renderLager();
+        }).catch(() => {
+          // Hvis fejl, opdater alligevel med eksisterende data
+          updateDashboard();
+          renderLager();
+        });
       }
       
-      // Opdater rapporter hvis vi er på rapporter siden - ALTID hent fra backend
+      // Opdater rapporter hvis vi er på rapporter siden
       const currentPage = document.querySelector('.page.active')?.id;
-      if (currentPage === 'rapporter') {
-        // Force refresh fra backend hver gang
-        if (typeof loadReportsHistory === 'function') {
-          loadReportsHistory();
-        }
+      if (currentPage === 'rapporter' && typeof loadReportsHistory === 'function') {
+        loadReportsHistory();
       }
       
-      // Tjek for ny rapport fra mobil (opdaterer også rapporter)
+      // Tjek for ny rapport fra mobil
       checkForNewReport();
     }
-  }, 3000); // 3 sekunder - mere hyppig opdatering
+  }, 3000); // 3 sekunder
   
   console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
 }
@@ -726,11 +730,18 @@ function updateDashboard() {
       statLavt.style.color = '#c00';
       statLavt.style.fontWeight = 'bold';
       statLavt.style.fontSize = '1.2em';
+      statLavt.style.cursor = 'pointer';
+      // Gør klikbar for at vise oversigt
+      statLavt.onclick = () => showVineOversigt('lavt');
+      statLavt.title = 'Klik for at se oversigt over vine i lavt lager';
     } else {
       statLavt.classList.remove('warning');
       statLavt.style.color = '';
       statLavt.style.fontWeight = '';
       statLavt.style.fontSize = '';
+      statLavt.style.cursor = '';
+      statLavt.onclick = null;
+      statLavt.title = '';
     }
   }
   if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
@@ -971,23 +982,28 @@ function renderLager() {
       advarsel = ' ⚠️ Lavt lager!';
     }
     
-    const lavtLager = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
+    // Tjek om lavt lager (antal < minAntal)
+    const isLowStock = antal < minAntal;
+    const lavtLagerStyle = isLowStock ? ' style="background: #fee; border-left: 4px solid #c00;"' : '';
+    const antalBold = isLowStock ? '<strong style="color: #c00;">' : '';
+    const antalBoldEnd = isLowStock ? '</strong>' : '';
+    
     // Markér optalte vine i dag med prik
     const isCountedToday = countedWinesToday.has(wine.vinId);
     const countedMarker = isCountedToday ? '<span style="color: #4CAF50; font-weight: bold; margin-right: 3px;" title="Optalt i dag">•</span>' : '';
     
     row.innerHTML = `
-      <td>${countedMarker}${wine.vinId || ''}</td>
-      <td>${wine.varenummer || ''}</td>
-      <td>${wine.navn || ''}</td>
-      <td>${wine.type || ''}</td>
-      <td>${wine.land || ''}</td>
-      <td>${wine.region || ''}</td>
-      <td>${wine.årgang || ''}</td>
-      <td><span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;">${wine.lokation || 'Ukendt'}</span></td>
-      <td>${wine.reol || ''}</td>
-      <td>${wine.hylde || ''}</td>
-      <td class="text-right antal-cell"${lavtLager}><strong>${wine.antal || 0}</strong></td>
+      <td${lavtLagerStyle}>${countedMarker}${wine.vinId || ''}</td>
+      <td${lavtLagerStyle}>${wine.varenummer || ''}</td>
+      <td${lavtLagerStyle}>${wine.navn || ''}</td>
+      <td${lavtLagerStyle}>${wine.type || ''}</td>
+      <td${lavtLagerStyle}>${wine.land || ''}</td>
+      <td${lavtLagerStyle}>${wine.region || ''}</td>
+      <td${lavtLagerStyle}>${wine.årgang || ''}</td>
+      <td${lavtLagerStyle}><span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;">${wine.lokation || 'Ukendt'}</span></td>
+      <td${lavtLagerStyle}>${wine.reol || ''}</td>
+      <td${lavtLagerStyle}>${wine.hylde || ''}</td>
+      <td class="text-right antal-cell"${lavtLagerStyle}>${antalBold}${wine.antal || 0}${antalBoldEnd}</td>
       <td class="text-right" data-status-cell="true">
         <div class="${statusClass}" style="padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; min-width: 80px; justify-content: center;">
           <span class="status-icon-${wine.vinId}" style="font-size: 1.2em;">${statusIcon}</span>
@@ -1921,19 +1937,26 @@ let reportsHistory = [];
 
 // Tjek for ny rapport fra mobil scanner
 function checkForNewReport() {
-  // ALTID opdater rapporter fra backend (ikke kun hvis localStorage flag er sat)
-  // Dette sikrer at rapporter fra mobil vises på PC
+  // ALTID opdater rapporter fra backend
   if (typeof loadReportsHistory === 'function') {
     loadReportsHistory();
   }
   
-  // OPDATER OGSÅ LAGER DATA - så dashboard opdateres efter scanning
-  // Vent lidt først så backend har tid til at gemme data
+  // OPDATER LAGER DATA - så dashboard og tabel opdateres efter scanning
+  // Vent lidt så backend har tid til at gemme data
   setTimeout(() => {
     if (typeof loadWines === 'function') {
-      loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
+      loadWines().then(() => {
+        // Sikr at dashboard og tabel opdateres
+        updateDashboard();
+        renderLager();
+      }).catch(() => {
+        // Hvis fejl, prøv alligevel at opdatere med eksisterende data
+        updateDashboard();
+        renderLager();
+      });
     }
-  }, 1000); // Vent 1 sekund
+  }, 2000); // Vent 2 sekunder for at backend kan gemme
   
   // Vis notifikation hvis localStorage flag er sat (for bagudkompatibilitet)
   const newReportAvailable = localStorage.getItem('newReportAvailable');
