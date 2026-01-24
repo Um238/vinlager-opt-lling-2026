@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v62
+// VINLAGER OPTÆLLING 2026 - APP.JS v63
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v62 - Fiks scanner timeout, fejlhåndtering, alle problemer');
+console.log('Version: v63 - Backup/gendan lager, fjern Tilbage, lokationer fallback');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -480,21 +480,120 @@ async function loadCountedWinesToday() {
   }
 }
 
+const WINES_BACKUP_KEY = 'vinlager_wines_backup';
+
+function saveWinesBackup(wines) {
+  if (wines && Array.isArray(wines) && wines.length > 0) {
+    try {
+      localStorage.setItem(WINES_BACKUP_KEY, JSON.stringify(wines));
+      localStorage.setItem(WINES_BACKUP_KEY + '_date', new Date().toISOString());
+      console.log('💾 Lager backup gemt:', wines.length, 'vine');
+    } catch (e) {
+      console.warn('Kunne ikke gemme lager backup:', e);
+    }
+  }
+}
+
+function restoreWinesFromBackup() {
+  try {
+    const saved = localStorage.getItem(WINES_BACKUP_KEY);
+    if (saved) {
+      const wines = JSON.parse(saved);
+      if (wines && Array.isArray(wines) && wines.length > 0) {
+        allWines = wines;
+        updateDashboard();
+        populateFilters();
+        renderLager();
+        if (document.getElementById('scan-input')) setupScanInput();
+        showBackupStatus();
+        console.log('✅ Lager gendannet fra backup:', wines.length, 'vine');
+        return wines.length;
+      }
+    }
+  } catch (e) {
+    console.warn('Kunne ikke gendanne lager fra backup:', e);
+  }
+  return 0;
+}
+
+function gendanLagerFraBackup() {
+  const n = restoreWinesFromBackup();
+  const msg = document.getElementById('backup-actions-msg');
+  if (msg) {
+    if (n > 0) {
+      msg.textContent = `✅ ${n} vine gendannet fra backup. Importér via Import-siden for at gemme til backend.`;
+      msg.style.color = '#060';
+    } else {
+      msg.textContent = 'Ingen lager-backup fundet. Importér først via Import.';
+      msg.style.color = '#c00';
+    }
+    setTimeout(() => { msg.textContent = ''; }, 8000);
+  }
+  if (n > 0) showSuccess(`${n} vine gendannet fra backup.`);
+  else showError('Ingen lager-backup fundet.');
+}
+
+function downloadLagerBackupCSV() {
+  let wines = [];
+  try {
+    const saved = localStorage.getItem(WINES_BACKUP_KEY);
+    if (saved) wines = JSON.parse(saved) || [];
+  } catch (e) {}
+  if (!wines.length) {
+    wines = allWines;
+  }
+  if (!wines.length) {
+    showError('Ingen lager at downloade. Importér først eller gendan fra backup.');
+    return;
+  }
+  const headers = ['VIN-ID','Varenummer','Navn','Type','Land','Region','Årgang','Lokation','Reol','Hylde','Antal','Min. Antal','Indkøbspris'];
+  const rows = wines.map(w => [
+    w.vinId || '', w.varenummer || '', w.navn || '', w.type || '', w.land || '', w.region || '', w.årgang || '',
+    w.lokation || '', w.reol || '', w.hylde || '', w.antal ?? '', w.minAntal ?? 24, w.indkøbspris ?? ''
+  ]);
+  const csv = [headers.join(';'), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'))].join('\r\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `vinlager_backup_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showSuccess('Lager backup downloadet som CSV. Gem filen og importér via Import for at gendanne.');
+  const msg = document.getElementById('backup-actions-msg');
+  if (msg) {
+    msg.textContent = '✅ CSV downloadet. Brug Import for at gendanne til backend.';
+    msg.style.color = '#060';
+    setTimeout(() => { msg.textContent = ''; }, 6000);
+  }
+}
+
 async function loadWines() {
   try {
     const wines = await apiCall('/api/wines');
     
-    // Hent også optalte vine i dag
-    await loadCountedWinesToday();
+    // Hent optalte vine i dag (ikke blokerende)
+    loadCountedWinesToday().catch(() => {});
     
     // Opdater allWines hvis vi fik data
-    if (wines && Array.isArray(wines)) {
+    if (wines && Array.isArray(wines) && wines.length > 0) {
       allWines = wines;
+      saveWinesBackup(wines);
+    } else if (wines && Array.isArray(wines) && wines.length === 0) {
+      const n = restoreWinesFromBackup();
+      if (n > 0) {
+        showSuccess(`Lager tomt på backend. Gendannet ${n} vine fra backup. Importér til backend for at gemme permanent.`);
+        return;
+      }
+      allWines = [];
     } else {
-      // Hvis API fejler, behold eksisterende data
-      console.warn('⚠️ API returnerede ikke gyldig data. Beholder eksisterende lager.');
+      console.warn('⚠️ API returnerede ikke gyldig data.');
       if (allWines.length === 0) {
-        showError('Kunne ikke hente vine. Tjek at backend kører.');
+        const n = restoreWinesFromBackup();
+        if (n > 0) {
+          showSuccess(`Lager gendannet fra backup (${n} vine). Importér til backend for at gemme permanent.`);
+        } else {
+          showError('Kunne ikke hente vine. Tjek backend. Ingen lokal backup fundet.');
+        }
         return;
       }
     }
@@ -519,6 +618,7 @@ async function loadWines() {
         const updatedWines = await apiCall('/api/wines');
         if (updatedWines && Array.isArray(updatedWines)) {
           allWines = updatedWines;
+          saveWinesBackup(updatedWines);
         }
       } catch (err) {
         console.error('Fejl ved genhentning efter opdatering:', err);
@@ -537,11 +637,16 @@ async function loadWines() {
     }
   } catch (error) {
     console.error('Fejl ved indlæsning af vine:', error);
-    // VIGTIGT: Nulstil IKKE allWines ved fejl - behold eksisterende data
     if (allWines.length === 0) {
-      showError('Kunne ikke hente vine. Tjek at backend kører.');
+      const n = restoreWinesFromBackup();
+      if (n > 0) {
+        showSuccess(`Lager gendannet fra backup (${n} vine). Importér til backend for at gemme permanent.`);
+      } else {
+        showError('Kunne ikke hente vine. Tjek backend. Ingen lokal backup fundet.');
+      }
     } else {
       console.warn('⚠️ API fejl, men beholder eksisterende lager data.');
+      saveWinesBackup(allWines);
     }
   }
 }
@@ -762,14 +867,16 @@ function clearFilter() {
 function renderLager() {
   // Tjek om allWines er tom eller undefined
   if (!allWines || allWines.length === 0) {
-    console.warn('⚠️ allWines er tom - prøver at hente data igen...');
+    console.warn('⚠️ allWines er tom - prøver at hente data eller gendanne fra backup...');
     const tbody = document.getElementById('lager-tbody');
+    let hint = '';
+    try {
+      if (localStorage.getItem(WINES_BACKUP_KEY)) hint = ' Gå til Rapporter og klik "Gendan lager fra backup" hvis du har backup.';
+    } catch (e) {}
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #999;">Ingen vine fundet. Prøver at hente data...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #666;">Ingen vine fundet. Prøver at hente data...' + hint + '</td></tr>';
     }
-    // Prøv at hente data igen
     loadWines().then(() => {
-      // Kald renderLager igen efter data er hentet
       setTimeout(() => renderLager(), 500);
     });
     return;
@@ -1960,10 +2067,19 @@ async function saveReportToHistory(reportName, reportType, wineCount, totalValue
 function showBackupStatus() {
   const backupCount = Object.keys(localStorage).filter(k => k.startsWith('reportsBackup_')).length;
   const reportsHistoryCount = reportsHistory.length;
+  let winesCount = 0;
+  try {
+    const w = localStorage.getItem(WINES_BACKUP_KEY);
+    if (w) winesCount = (JSON.parse(w) || []).length;
+  } catch (e) {}
   const backupInfo = document.getElementById('backup-status');
   if (backupInfo) {
-    if (backupCount > 0 || reportsHistoryCount > 0) {
-      backupInfo.textContent = `💾 Backup: ${backupCount} individuelle + ${reportsHistoryCount} i historik (localStorage tokens)`;
+    const parts = [];
+    if (winesCount > 0) parts.push(`${winesCount} vine`);
+    if (backupCount > 0) parts.push(`${backupCount} rapporter`);
+    if (reportsHistoryCount > 0) parts.push(`${reportsHistoryCount} i historik`);
+    if (parts.length > 0) {
+      backupInfo.textContent = '💾 Backup: ' + parts.join(' + ');
       backupInfo.style.display = 'block';
       backupInfo.style.background = '#e6f7e6';
       backupInfo.style.color = '#060';
@@ -3933,6 +4049,9 @@ async function finishCounting() {
   window.archiveReport = archiveReport;
   window.unarchiveReport = unarchiveReport;
   window.generateVærdiReportDownload = generateVærdiReportDownload;
+  window.gendanLagerFraBackup = gendanLagerFraBackup;
+  window.downloadLagerBackupCSV = downloadLagerBackupCSV;
+  window.restoreWinesFromBackup = restoreWinesFromBackup;
   window.switchAdminTab = switchAdminTab;
   window.handleCreateUser = handleCreateUser;
   window.editUser = editUser;

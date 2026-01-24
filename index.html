@@ -289,6 +289,17 @@
           💾 Backup: 0 rapporter gemt lokalt
         </div>
         
+        <!-- Gendan lager fra backup -->
+        <div style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button class="btn-secondary" onclick="gendanLagerFraBackup()" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            🔄 Gendan lager fra backup
+          </button>
+          <button class="btn-secondary" onclick="downloadLagerBackupCSV()" style="background: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📥 Download lager backup (CSV)
+          </button>
+          <span id="backup-actions-msg" style="font-size: 0.9em; color: #666;"></span>
+        </div>
+        
         <!-- Filtre -->
         <div class="filter-bar" style="margin-bottom: 1rem;">
           <label style="margin-right: 1rem;">
@@ -548,7 +559,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=64"></script>
+      <script src="app.js?v=65"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

@@ -375,7 +375,6 @@
           <select id="location-select">
             <option value="">Alle lokationer</option>
           </select>
-          <a href="index.html" onclick="event.preventDefault(); try{if(window.closeScanner){window.closeScanner();}else{window.location.href='index.html';}}catch(e){window.location.href='index.html';}" style="margin-left: 10px; padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9em; text-decoration: none; display: inline-block;">Tilbage</a>
         </div>
         <div id="status-message" class="status-message" style="display: none;"></div>
       </div>
@@ -568,7 +567,7 @@
             console.warn('Timeout ved hentning af lokationer - bruger fallback');
           }, 2000); // KUN 2 sekunder timeout
           
-          const response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
+          let response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json' }
           });
@@ -582,7 +581,23 @@
           locations = await response.json();
           
           if (!locations || locations.length === 0) {
-            // Ingen lokationer - brug "Alle lokationer" som standard
+            const c2 = new AbortController();
+            const t2 = setTimeout(() => c2.abort(), 2000);
+            try {
+              const r2 = await fetch(`${config.API_URL}/api/locations`, {
+                signal: c2.signal,
+                headers: { 'Content-Type': 'application/json' }
+              });
+              clearTimeout(t2);
+              if (r2.ok) {
+                locations = await r2.json();
+              }
+            } catch (e2) {
+              clearTimeout(t2);
+            }
+          }
+          
+          if (!locations || locations.length === 0) {
             selectedLocationId = null;
             return;
           }
