@@ -1,10 +1,13 @@
 const db = require('../config/database');
 
 // Lagerrapport - med lokation data fra inventory system
+// KRITISK FIX: Hent både fra inventory OG wines (hvis der ikke er inventory data)
 exports.getLagerReport = (req, res) => {
+  // Først hent alle vine med inventory data
   db.all(
     `SELECT 
       w.vinId,
+      w.varenummer,
       w.navn,
       w.type,
       w.land,
@@ -22,12 +25,46 @@ exports.getLagerReport = (req, res) => {
     INNER JOIN locations l ON i.location_id = l.id
     ORDER BY l.name, i.reol, i.hylde, w.navn`,
     [],
-    (err, rows) => {
+    (err, inventoryRows) => {
       if (err) {
         console.error('Fejl ved hentning af lagerrapport:', err);
         return res.status(500).json({ error: 'Fejl ved hentning af rapport' });
       }
-      res.json(rows);
+      
+      // Hent også vine der kun findes i wines tabellen (ikke i inventory)
+      db.all(
+        `SELECT 
+          w.vinId,
+          w.varenummer,
+          w.navn,
+          w.type,
+          w.land,
+          w.region,
+          w.årgang,
+          w.indkøbspris,
+          'Lokal' as lokation,
+          '' as reol,
+          '' as hylde,
+          w.antal,
+          COALESCE(w.minAntal, 24) as minAntal,
+          CASE WHEN w.antal < COALESCE(w.minAntal, 24) THEN 1 ELSE 0 END as lavtLager
+        FROM wines w
+        LEFT JOIN inventory i ON w.id = i.wine_id
+        WHERE i.id IS NULL
+        ORDER BY w.navn`,
+        [],
+        (err2, winesOnlyRows) => {
+          if (err2) {
+            console.error('Fejl ved hentning af wines-only data:', err2);
+            // Returner kun inventory data hvis der er fejl
+            return res.json(inventoryRows || []);
+          }
+          
+          // Kombiner begge resultater
+          const allRows = [...(inventoryRows || []), ...(winesOnlyRows || [])];
+          res.json(allRows);
+        }
+      );
     }
   );
 };
