@@ -730,7 +730,15 @@
         y += 8;
         
         doc.setFontSize(10);
-        doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+        // Brug korrekt tidsstempel
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const dateStr = `${day}.${month}.${year} ${hours}:${minutes}`;
+        doc.text('Genereret: ' + dateStr, 14, y);
         y += 10;
         
         // Grupper vine efter lokation
@@ -799,8 +807,8 @@
             locationWineCount++;
             
             x = 14;
-            // Tilføj prik (•) foran VIN-ID for at markere optalte vine
-            const vinIdMarked = '• ' + (wine.vinId || '');
+            // Tilføj TYDELIG markering for optalte vine - brug fed skrift og stjerne
+            const vinIdMarked = '★ ' + (wine.vinId || '');
             const row = [
               vinIdMarked,
               wine.navn || 'Ukendt vare',
@@ -810,10 +818,14 @@
               pris.toFixed(2)
             ];
             
+            // Markér hele rækken med fed skrift for optalte vine
+            doc.setFont(undefined, 'bold');
             row.forEach((cell, i) => {
               doc.text(String(cell).substring(0, 20), x, y);
               x += colWidths[i];
             });
+            // Gendan normal skrift efter optalte vine
+            doc.setFont(undefined, 'normal');
             y += 6;
           });
           

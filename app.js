@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v58
+// VINLAGER OPTÆLLING 2026 - APP.JS v59
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v58 - Fiks tidsstempler, backup status, markeringer, lavt lager');
+console.log('Version: v59 - Fiks dashboard opdatering, PDF markeringer, tidsstempler, lavt lager');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -68,13 +68,13 @@ function startAutoUpdate() {
   autoUpdateInterval = setInterval(() => {
     // Opdater kun hvis brugeren er logget ind og ikke er i scanner mode
     if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
-      // Opdater dashboard hvis vi er på dashboard siden
-      const currentPage = document.querySelector('.page.active')?.id;
-      if (currentPage === 'dashboard' || currentPage === 'lager') {
-        loadWines();
+      // OPDATER ALTID LAGER DATA - så dashboard opdateres efter scanning
+      if (typeof loadWines === 'function') {
+        loadWines(); // Dette opdaterer allWines og kalder updateDashboard()
       }
       
       // Opdater rapporter hvis vi er på rapporter siden - ALTID hent fra backend
+      const currentPage = document.querySelector('.page.active')?.id;
       if (currentPage === 'rapporter') {
         // Force refresh fra backend hver gang
         if (typeof loadReportsHistory === 'function') {
@@ -85,7 +85,7 @@ function startAutoUpdate() {
       // Tjek for ny rapport fra mobil (opdaterer også rapporter)
       checkForNewReport();
     }
-  }, 5000); // 5 sekunder
+  }, 3000); // 3 sekunder - mere hyppig opdatering
   
   console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
 }
@@ -825,7 +825,7 @@ function renderLager() {
       <td><span style="background: #e6f7e6; color: #060; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;">${wine.lokation || 'Ukendt'}</span></td>
       <td>${wine.reol || ''}</td>
       <td>${wine.hylde || ''}</td>
-      <td class="text-right antal-cell"${lavtLager}>${wine.antal || 0}</td>
+      <td class="text-right antal-cell"${lavtLager}><strong>${wine.antal || 0}</strong></td>
       <td class="text-right" data-status-cell="true">
         <div class="${statusClass}" style="padding: 2px 5px; border-radius: 3px; display: inline-block;">
           <span class="status-icon-${wine.vinId}">${statusIcon}</span>
@@ -2313,7 +2313,34 @@ async function generateFullReportPDF(report) {
     y += 10;
     
     doc.setFontSize(10);
-    doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
+    // Formatér tidsstempel korrekt
+    let reportDateStr = '';
+    if (report.date) {
+      if (report.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+        const date = new Date(report.date.replace(' ', 'T'));
+        if (!isNaN(date.getTime())) {
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          reportDateStr = `${day}.${month}.${year} ${hours}:${minutes}`;
+        } else {
+          reportDateStr = report.date;
+        }
+      } else {
+        reportDateStr = report.date;
+      }
+    } else {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      reportDateStr = `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    doc.text('Genereret: ' + reportDateStr, 14, y);
     y += 10;
     
     // Grupper vine efter lokation
@@ -2388,8 +2415,10 @@ async function generateFullReportPDF(report) {
         locationWineCount++;
         
         x = 14;
-        // Tilføj prik (•) foran VIN-ID for at markere optalte vine
-        const vinIdMarked = '• ' + (wine.vinId || '');
+        // Tilføj TYDELIG markering for optalte vine - brug fed skrift og stjerne
+        const vinIdMarked = '★ ' + (wine.vinId || '');
+        // Markér hele rækken med fed skrift for optalte vine
+        doc.setFont(undefined, 'bold');
         const row = [
           vinIdMarked,
           wine.navn || '',
@@ -2404,6 +2433,8 @@ async function generateFullReportPDF(report) {
           doc.text(String(cell).substring(0, 25), x, y);
           x += colWidths[i];
         });
+        // Gendan normal skrift efter optalte vine
+        doc.setFont(undefined, 'normal');
         y += 6;
       });
       
@@ -2536,7 +2567,34 @@ async function generateFullReportPDFForDownload(report) {
     y += 10;
     
     doc.setFontSize(10);
-    doc.text('Genereret: ' + (report.date || new Date().toLocaleString('da-DK')), 14, y);
+    // Formatér tidsstempel korrekt
+    let reportDateStr = '';
+    if (report.date) {
+      if (report.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+        const date = new Date(report.date.replace(' ', 'T'));
+        if (!isNaN(date.getTime())) {
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          reportDateStr = `${day}.${month}.${year} ${hours}:${minutes}`;
+        } else {
+          reportDateStr = report.date;
+        }
+      } else {
+        reportDateStr = report.date;
+      }
+    } else {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      reportDateStr = `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    doc.text('Genereret: ' + reportDateStr, 14, y);
     y += 10;
     
     // Grupper vine efter lokation
@@ -2611,8 +2669,10 @@ async function generateFullReportPDFForDownload(report) {
         locationWineCount++;
         
         x = 14;
-        // Tilføj prik (•) foran VIN-ID for at markere optalte vine
-        const vinIdMarked = '• ' + (wine.vinId || '');
+        // Tilføj TYDELIG markering for optalte vine - brug fed skrift og stjerne
+        const vinIdMarked = '★ ' + (wine.vinId || '');
+        // Markér hele rækken med fed skrift for optalte vine
+        doc.setFont(undefined, 'bold');
         const row = [
           vinIdMarked,
           wine.navn || '',
@@ -2627,6 +2687,8 @@ async function generateFullReportPDFForDownload(report) {
           doc.text(String(cell).substring(0, 25), x, y);
           x += colWidths[i];
         });
+        // Gendan normal skrift efter optalte vine
+        doc.setFont(undefined, 'normal');
         y += 6;
       });
       
