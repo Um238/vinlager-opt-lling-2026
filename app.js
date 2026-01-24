@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v61
+// VINLAGER OPTÆLLING 2026 - APP.JS v62
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v61 - Fiks scanner låsning, tidsstempler, lager opdatering, lavt lager visning');
+console.log('Version: v62 - Fiks scanner timeout, fejlhåndtering, alle problemer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 

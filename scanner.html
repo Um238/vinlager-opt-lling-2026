@@ -370,6 +370,7 @@
           <select id="location-select">
             <option value="">Henter lokationer...</option>
           </select>
+          <button onclick="closeScanner()" style="margin-left: 10px; padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Tilbage</button>
         </div>
         <div id="status-message" class="status-message" style="display: none;"></div>
       </div>
@@ -464,16 +465,34 @@
       }
     }
     
-    // Hent lokationer
+    // Hent lokationer - med timeout og fejlhåndtering
     async function loadLocations() {
+      const select = document.getElementById('location-select');
+      
       try {
-        locations = await apiCall('/api/locations?category=Vin');
-        const select = document.getElementById('location-select');
-        select.innerHTML = '<option value="">Vælg lokation...</option>';
+        // Tilføj timeout til API kald
+        const config = getConfig();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sekunder timeout
         
-        if (locations.length === 0) {
-          select.innerHTML += '<option value="">Ingen lokationer fundet</option>';
-          showStatus('⚠️ Ingen lokationer fundet. Opret en lokation i admin.', 'error');
+        const response = await fetch(`${config.API_URL}/api/locations?category=Vin`, {
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`API fejl: ${response.status}`);
+        }
+        
+        locations = await response.json();
+        select.innerHTML = '<option value="">Alle lokationer</option>';
+        
+        if (!locations || locations.length === 0) {
+          // Ingen lokationer - brug "Alle lokationer" som standard
+          selectedLocationId = null;
+          showStatus('ℹ️ Ingen specifik lokation valgt - alle lokationer', 'success');
           return;
         }
         
@@ -496,11 +515,17 @@
           if (selectedLocationId) {
             const loc = locations.find(l => l.id === selectedLocationId);
             showStatus(`📍 Lokation: ${loc.name}`, 'success');
+          } else {
+            showStatus('ℹ️ Alle lokationer', 'success');
           }
         });
       } catch (error) {
         console.error('Fejl ved hentning af lokationer:', error);
-        showStatus('⚠️ Kunne ikke hente lokationer', 'error');
+        // FALLBACK: Tillad scanneren at virke uden lokationer
+        select.innerHTML = '<option value="">Alle lokationer (offline)</option>';
+        selectedLocationId = null;
+        showStatus('⚠️ Kunne ikke hente lokationer - bruger "Alle lokationer"', 'error');
+        // Scanneren kan stadig bruges!
       }
     }
     
@@ -922,43 +947,50 @@
     
     // Luk scanner - ALTID luk uden bekræftelse (brugeren kan altid komme tilbage)
     function closeScanner() {
-      // Stop scanning
-      if (scanAnimationFrame) {
-        cancelAnimationFrame(scanAnimationFrame);
-        scanAnimationFrame = null;
-      }
-      if (qrStream) {
-        qrStream.getTracks().forEach(track => track.stop());
-        qrStream = null;
-      }
-      qrScanning = false;
+      console.log('Lukker scanner...');
       
-      // Naviger tilbage til hovedprogrammet
+      // Stop scanning
       try {
-        window.location.href = 'index.html';
+        if (scanAnimationFrame) {
+          cancelAnimationFrame(scanAnimationFrame);
+          scanAnimationFrame = null;
+        }
+        if (qrStream) {
+          qrStream.getTracks().forEach(track => track.stop());
+          qrStream = null;
+        }
+        qrScanning = false;
       } catch (e) {
-        // Fallback hvis navigation fejler
-        console.error('Fejl ved navigation:', e);
-        // Prøv at åbne i nyt vindue
-        window.open('index.html', '_self');
+        console.warn('Fejl ved stop af scanner:', e);
+      }
+      
+      // Naviger tilbage til hovedprogrammet - FORSØG FLERE METODER
+      try {
+        // Metode 1: Standard navigation
+        window.location.href = 'index.html';
+      } catch (e1) {
+        try {
+          // Metode 2: Replace
+          window.location.replace('index.html');
+        } catch (e2) {
+          try {
+            // Metode 3: Open
+            window.open('index.html', '_self');
+          } catch (e3) {
+            // Metode 4: Assign
+            try {
+              window.location.assign('index.html');
+            } catch (e4) {
+              console.error('Alle navigation metoder fejlede:', e1, e2, e3, e4);
+              alert('Kunne ikke navigere. Prøv at lukke browseren og åbne programmet igen.');
+            }
+          }
+        }
       }
     }
     
-    // Tilføj også en "Tilbage" knap i header som altid er synlig
-    document.addEventListener('DOMContentLoaded', function() {
-      const header = document.querySelector('.scanner-header');
-      if (header) {
-        // Tjek om luk-knappen allerede findes
-        let closeBtn = document.querySelector('.scanner-close-btn');
-        if (!closeBtn) {
-          closeBtn = document.createElement('button');
-          closeBtn.className = 'scanner-close-btn';
-          closeBtn.textContent = '✕ Luk';
-          closeBtn.onclick = closeScanner;
-          header.appendChild(closeBtn);
-        }
-      }
-    });
+    // Eksponer closeScanner globalt så den altid kan kaldes
+    window.closeScanner = closeScanner;
     
     // Vis status
     function showStatus(message, type) {
@@ -982,17 +1014,28 @@
     
     // Start scanner når siden loader
     document.addEventListener('DOMContentLoaded', () => {
-      // Hent lokationer først
-      loadLocations().then(() => {
+      // Hent lokationer, men start scanner uanset hvad (med timeout)
+      Promise.race([
+        loadLocations(),
+        new Promise(resolve => setTimeout(resolve, 3000)) // Max 3 sekunder ventetid
+      ]).then(() => {
+        // Start scanner uanset om lokationer blev hentet eller ej
+        startQRScanner();
+      }).catch(() => {
+        // Hvis alt fejler, start scanner alligevel
+        console.warn('Fejl ved indlæsning, starter scanner alligevel');
         startQRScanner();
       });
       
       // Enter key i modal
-      document.getElementById('quantity-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          saveQuantity();
-        }
-      });
+      const quantityInput = document.getElementById('quantity-input');
+      if (quantityInput) {
+        quantityInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            saveQuantity();
+          }
+        });
+      }
     });
   </script>
 </body>
