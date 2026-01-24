@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v73
+// VINLAGER OPTÆLLING 2026 - APP.JS v74
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v73 - KOMPLET FIX: Varenummer i rapporter, opdateringer virker, dashboard og tabel opdaterer korrekt');
+console.log('Version: v74 - KRITISK FIX: Rød/gul/grøn baseret på minAntal, lavt lager vises korrekt, alle opdateringer virker');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -857,9 +857,10 @@ function showVineOversigt(type) {
   let filteredWines = [];
   if (type === 'lavt') {
     // Filtrer korrekt - tjek både antal og minAntal
+    // KRITISK FIX: Brug parseInt for at sikre tal sammenligning
     filteredWines = allWines.filter(w => {
-      const antal = w.antal || 0;
-      const minAntal = w.minAntal || 24;
+      const antal = parseInt(w.antal) || 0;
+      const minAntal = parseInt(w.minAntal) || 24;
       return antal < minAntal;
     });
     if (modalTitle) modalTitle.textContent = `Lavt Lager - Oversigt (${filteredWines.length} vine)`;
@@ -934,7 +935,10 @@ function showVineOversigt(type) {
   
   filteredWines.forEach(wine => {
     const row = document.createElement('tr');
-    const lavtLagerClass = wine.antal < wine.minAntal ? ' style="background: #fee;"' : '';
+    // KRITISK FIX: Brug parseInt for at sikre tal sammenligning
+    const antal = parseInt(wine.antal) || 0;
+    const minAntal = parseInt(wine.minAntal) || 24;
+    const lavtLagerClass = antal < minAntal ? ' style="background: #fee;"' : '';
     row.innerHTML = `
       <td${lavtLagerClass}>${wine.navn || ''}</td>
       <td${lavtLagerClass}>${wine.type || ''}</td>
@@ -1061,26 +1065,28 @@ function renderLager() {
 
   filtered.forEach(wine => {
     const row = document.createElement('tr');
-    const minAntal = wine.minAntal || 24; // Standard minimum er 24 flasker
-    const antal = wine.antal || 0;
+    const minAntal = parseInt(wine.minAntal) || 24; // Standard minimum er 24 flasker
+    const antal = parseInt(wine.antal) || 0;
     let statusClass = '';
     let statusIcon = '';
     let advarsel = '';
     
-    // Farvekodning baseret på ANTAL (ikke minimum)
-    // Grøn: 24 eller flere flasker
-    // Gul: 13-23 flasker  
-    // Rød: 12 eller færre flasker
-    if (antal >= 24) {
+    // KRITISK FIX: Farvekodning baseret på sammenligning med minAntal
+    // Grøn: antal >= minAntal (ok)
+    // Gul: antal >= minAntal * 0.5 (advarsel)
+    // Rød: antal < minAntal * 0.5 (kritisk lavt)
+    const threshold50 = Math.floor(minAntal * 0.5);
+    if (antal >= minAntal) {
       statusClass = 'status-green';
       statusIcon = '🟢';
-    } else if (antal >= 13) {
+    } else if (antal >= threshold50) {
       statusClass = 'status-orange';
       statusIcon = '🟠';
+      advarsel = ' ⚠️ Lavt lager!';
     } else {
       statusClass = 'status-red';
       statusIcon = '🔴';
-      advarsel = ' ⚠️ Lavt lager!';
+      advarsel = ' ⚠️ Kritisk lavt lager!';
     }
     
     // Tjek om lavt lager (antal < minAntal)
@@ -1182,6 +1188,13 @@ function renderLager() {
       });
     }
   });
+  
+  // KRITISK FIX: Opdater dashboard EFTER tabel er renderet
+  // Dette sikrer at dashboard altid viser korrekt antal i lavt lager
+  if (typeof updateDashboard === 'function') {
+    updateDashboard();
+    console.log('✅ Dashboard opdateret i renderLager()');
+  }
 }
 
 // Opdater pris
