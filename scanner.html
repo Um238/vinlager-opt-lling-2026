@@ -617,30 +617,26 @@
       }, 100);
     }
     
-    // Start QR scanner
+    // Start QR scanner - SIMPEL VERSION
     async function startQRScanner() {
+      if (qrScanning) {
+        return;
+      }
+      
       const video = document.getElementById('qr-video');
       const canvas = document.getElementById('qr-canvas');
       
-      if (qrScanning) {
-        console.log('Scanner kører allerede');
+      if (!video || !canvas) {
+        console.error('Video eller canvas ikke fundet!');
         return;
       }
       
-      // Tjek at jsQR er indlæst
       if (typeof jsQR === 'undefined') {
-        console.error('jsQR ikke indlæst! Vent lidt...');
-        setTimeout(() => {
-          if (typeof jsQR !== 'undefined') {
-            startQRScanner();
-          } else {
-            showStatus('Fejl: Scanner bibliotek ikke indlæst', 'error');
-          }
-        }, 500);
+        console.error('jsQR ikke klar endnu');
         return;
       }
       
-      console.log('Starter kamera...');
+      console.log('📹 Starter kamera...');
       try {
         // Chrome kompatibilitet - prøv flere video constraints
         let stream = null;
@@ -666,20 +662,17 @@
         video.srcObject = stream;
         qrScanning = true;
         
-        // Start video med det samme
+        // Start video
         video.onloadedmetadata = () => {
           video.play().catch(err => {
             console.error('Video play fejl:', err);
-            showStatus('Kunne ikke starte video', 'error');
           });
         };
         
-        // Prøv også at starte video direkte (hvis metadata allerede er loaded)
-        if (video.readyState >= 2) {
-          video.play().catch(err => {
-            console.warn('Direkte video play fejlede, venter på metadata:', err);
-          });
-        }
+        // Prøv at starte med det samme
+        video.play().catch(() => {
+          // Vent på metadata
+        });
         
         // Scan loop
         function scanFrame() {
@@ -697,20 +690,12 @@
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            if (typeof jsQR !== 'undefined' && typeof jsQR === 'function') {
+            if (typeof jsQR !== 'undefined') {
               const code = jsQR(imageData.data, imageData.width, imageData.height);
               if (code && code.data) {
-                console.log('📷 Stregkode scannet:', code.data);
+                console.log('✅ Stregkode scannet:', code.data);
                 handleScan(code.data);
               }
-            } else if (typeof jsQR !== 'undefined') {
-              const code = jsQR(imageData.data, imageData.width, imageData.height);
-              if (code && code.data) {
-                console.log('📷 Stregkode scannet:', code.data);
-                handleScan(code.data);
-              }
-            } else {
-              console.error('jsQR ikke tilgængelig!');
             }
           } catch (err) {
             console.error('Scan fejl:', err);
@@ -721,8 +706,9 @@
           }
         }
         
+        // Start scan loop
         scanFrame();
-        console.log('✅ Scanner startet - scanFrame kører');
+        console.log('✅ Scanner startet!');
         showStatus('Scanner klar', 'success');
       } catch (error) {
         console.error('Kamera fejl:', error);
@@ -1089,52 +1075,56 @@
       return `${integerPart},${decimalPart}`;
     }
     
-    function initializeScanner() {
-      console.log('Initialiserer scanner...');
+    // Start ALT når siden er klar - SIMPEL VERSION
+    function startEverything() {
+      console.log('🚀 Starter scanner...');
       
-      // Start scanner MED DET SAMME - ikke vent
-      if (typeof startQRScanner === 'function') {
+      // Hent lokationer
+      loadLocations();
+      
+      // Start scanner - vent til jsQR er loaded
+      function tryStartScanner() {
+        if (typeof jsQR === 'undefined') {
+          setTimeout(tryStartScanner, 100);
+          return;
+        }
+        console.log('✅ jsQR klar, starter kamera...');
         startQRScanner().catch(err => {
-          console.error('Fejl ved start af scanner:', err);
+          console.error('Kamera fejl:', err);
           showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
         });
-      } else {
-        console.error('startQRScanner ikke defineret!');
-        setTimeout(() => {
-          if (typeof startQRScanner === 'function') {
-            startQRScanner().catch(err => {
-              console.error('Fejl ved start af scanner:', err);
-              showStatus('Kunne ikke starte kamera. Tjek tilladelser.', 'error');
-            });
-          }
-        }, 200);
       }
       
-      // Hent lokationer i baggrunden (ikke blokerende)
-      if (typeof loadLocations === 'function') {
-        loadLocations();
-      }
+      setTimeout(tryStartScanner, 300);
       
       // Enter key i modal
       const quantityInput = document.getElementById('quantity-input');
       if (quantityInput) {
         quantityInput.addEventListener('keypress', (e) => {
           if (e.key === 'Enter') {
-            if (typeof saveQuantity === 'function') {
-              saveQuantity();
-            }
+            saveQuantity();
           }
         });
       }
     }
     
-    // Start scanner MED DET SAMME når DOM er klar
+    // Start når DOM er klar
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeScanner);
+      document.addEventListener('DOMContentLoaded', startEverything);
     } else {
-      // DOM er allerede loaded - start med det samme
-      initializeScanner();
+      startEverything();
     }
+    
+    // Også start når window er loaded (sikrer scripts er klar)
+    window.addEventListener('load', () => {
+      if (!qrScanning && typeof jsQR !== 'undefined') {
+        setTimeout(() => {
+          if (!qrScanning) {
+            startQRScanner().catch(() => {});
+          }
+        }, 500);
+      }
+    });
   </script>
 </body>
 </html>
