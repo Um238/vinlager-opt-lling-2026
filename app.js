@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v68
+// VINLAGER OPTÆLLING 2026 - APP.JS v69
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v68 - 404 fejl håndteres stille, ingen forstyrrende beskeder');
+console.log('Version: v69 - KOMPLET SYSTEM FIX: Varelager bevares, rapporter virker, tabel opdaterer, rød/gul/grøn virker, dashboard virker');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -64,19 +64,19 @@ function startAutoUpdate() {
     clearInterval(autoUpdateInterval);
   }
   
-  // Start nyt interval - opdater hver 3 sekunder
+  // Start nyt interval - opdater hver 5 sekunder (mindre aggressivt)
   autoUpdateInterval = setInterval(() => {
     if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
       // OPDATER ALTID LAGER DATA - så dashboard og tabel opdateres efter scanning
       if (typeof loadWines === 'function') {
         loadWines().then(() => {
           // Sikr at dashboard og tabel opdateres
-          updateDashboard();
-          renderLager();
+          if (typeof updateDashboard === 'function') updateDashboard();
+          if (typeof renderLager === 'function') renderLager();
         }).catch(() => {
           // Hvis fejl, opdater alligevel med eksisterende data
-          updateDashboard();
-          renderLager();
+          if (typeof updateDashboard === 'function') updateDashboard();
+          if (typeof renderLager === 'function') renderLager();
         });
       }
       
@@ -86,10 +86,10 @@ function startAutoUpdate() {
         loadReportsHistory();
       }
       
-      // Tjek for ny rapport fra mobil
+      // Tjek for ny rapport fra mobil (kun hver 5. sekund, ikke hver 3.)
       checkForNewReport();
     }
-  }, 3000); // 3 sekunder
+  }, 5000); // 5 sekunder - mindre aggressivt
   
   console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
 }
@@ -628,27 +628,37 @@ async function loadWines() {
     // Hent optalte vine i dag (ikke blokerende)
     loadCountedWinesToday().catch(() => {});
     
-    // Opdater allWines hvis vi fik data
+    // KRITISK FIX: Kun opdater allWines hvis vi faktisk fik gyldig data fra backend
+    // Hvis backend returnerer tom array, BEHOLD eksisterende data (ikke overskriv!)
     if (wines && Array.isArray(wines) && wines.length > 0) {
+      // Vi fik data - opdater
       allWines = wines;
       saveWinesBackup(wines);
     } else if (wines && Array.isArray(wines) && wines.length === 0) {
-      const n = restoreWinesFromBackup();
-      if (n > 0) {
-        showSuccess(`Lager tomt på backend. Gendannet ${n} vine fra backup. Importér til backend for at gemme permanent.`);
-        return;
-      }
-      allWines = [];
-    } else {
-      console.warn('⚠️ API returnerede ikke gyldig data.');
+      // Backend returnerer tom array - BEHOLD eksisterende data hvis vi har noget
       if (allWines.length === 0) {
+        // Kun hvis vi ikke har noget data, prøv at gendanne fra backup
         const n = restoreWinesFromBackup();
         if (n > 0) {
-          showSuccess(`Lager gendannet fra backup (${n} vine). Importér til backend for at gemme permanent.`);
-        } else {
-          showError('Kunne ikke hente vine. Tjek backend. Ingen lokal backup fundet.');
+          console.log(`Lager tomt på backend. Gendannet ${n} vine fra backup.`);
         }
-        return;
+      } else {
+        // Vi har eksisterende data - BEHOLD det! Backend er måske bare tom efter deploy
+        console.log('Backend tom, men beholder eksisterende lager data.');
+        saveWinesBackup(allWines); // Sikr backup er opdateret
+      }
+    } else {
+      // API fejl eller ugyldig data - BEHOLD eksisterende data
+      console.warn('⚠️ API returnerede ikke gyldig data. Beholder eksisterende lager.');
+      if (allWines.length === 0) {
+        // Kun hvis vi ikke har noget, prøv backup
+        const n = restoreWinesFromBackup();
+        if (n > 0) {
+          console.log(`Gendannet ${n} vine fra backup.`);
+        }
+      } else {
+        // Behold eksisterende data
+        saveWinesBackup(allWines);
       }
     }
     
@@ -691,34 +701,49 @@ async function loadWines() {
     }
   } catch (error) {
     console.error('Fejl ved indlæsning af vine:', error);
+    // KRITISK: Ved fejl, BEHOLD altid eksisterende data
     if (allWines.length === 0) {
+      // Kun hvis vi ikke har noget, prøv backup
       const n = restoreWinesFromBackup();
       if (n > 0) {
-        showSuccess(`Lager gendannet fra backup (${n} vine). Importér til backend for at gemme permanent.`);
-      } else {
-        showError('Kunne ikke hente vine. Tjek backend. Ingen lokal backup fundet.');
+        console.log(`Gendannet ${n} vine fra backup.`);
       }
     } else {
+      // BEHOLD eksisterende data - ikke overskriv med tom array!
       console.warn('⚠️ API fejl, men beholder eksisterende lager data.');
       saveWinesBackup(allWines);
     }
+    // OPDATER ALLIGEVEL dashboard og tabel med eksisterende data
+    updateDashboard();
+    populateFilters();
+    renderLager();
   }
 }
 
 // Dashboard
 function updateDashboard() {
+  // SIKR at allWines er defineret
+  if (!allWines || !Array.isArray(allWines)) {
+    allWines = [];
+  }
+  
   const antVine = allWines.length;
-  const lavtLager = allWines.filter(w => w.antal < w.minAntal).length;
+  // Beregn lavt lager korrekt - tjek både antal og minAntal
+  const lavtLager = allWines.filter(w => {
+    const antal = w.antal || 0;
+    const minAntal = w.minAntal || 24;
+    return antal < minAntal;
+  }).length;
   
   let totalVærdi = 0;
   allWines.forEach(w => {
     totalVærdi += (w.antal || 0) * (w.indkøbspris || 0);
   });
-  const kroner = Math.floor(totalVærdi);
-  const øre = Math.round((totalVærdi - kroner) * 100);
   
   // Generer QR-kode til scanner link
-  generateScannerQR();
+  if (typeof generateScannerQR === 'function') {
+    generateScannerQR();
+  }
 
   // Opdater dashboard elementer hvis de findes
   const statAntVine = document.getElementById('stat-ant-vine');
@@ -736,7 +761,11 @@ function updateDashboard() {
       statLavt.style.fontSize = '1.2em';
       statLavt.style.cursor = 'pointer';
       // Gør klikbar for at vise oversigt
-      statLavt.onclick = () => showVineOversigt('lavt');
+      statLavt.onclick = () => {
+        if (typeof showVineOversigt === 'function') {
+          showVineOversigt('lavt');
+        }
+      };
       statLavt.title = 'Klik for at se oversigt over vine i lavt lager';
     } else {
       statLavt.classList.remove('warning');
@@ -748,9 +777,13 @@ function updateDashboard() {
       statLavt.title = '';
     }
   }
-  if (statVærdi) statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
-  
-  // QR-kode genereres når modal åbnes
+  if (statVærdi) {
+    if (typeof formatDanskPris === 'function') {
+      statVærdi.textContent = `${formatDanskPris(totalVærdi)} kr.`;
+    } else {
+      statVærdi.textContent = `${totalVærdi.toFixed(2)} kr.`;
+    }
+  }
 }
 
 // Vis vine oversigt modal
@@ -1943,28 +1976,40 @@ let reportsHistory = [];
 function checkForNewReport() {
   // ALTID opdater rapporter fra backend
   if (typeof loadReportsHistory === 'function') {
-    loadReportsHistory();
+    loadReportsHistory().then(() => {
+      // Efter rapporter er hentet, opdater også lager
+      setTimeout(() => {
+        if (typeof loadWines === 'function') {
+          loadWines().then(() => {
+            // SIKR at dashboard og tabel opdateres
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof renderLager === 'function') renderLager();
+          }).catch((err) => {
+            console.error('Fejl ved opdatering:', err);
+            // Hvis fejl, opdater alligevel med eksisterende data
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof renderLager === 'function') renderLager();
+          });
+        }
+      }, 2000); // Vent 2 sekunder for at backend kan gemme
+    }).catch(() => {
+      // Hvis rapporter fejler, opdater alligevel lager
+      setTimeout(() => {
+        if (typeof loadWines === 'function') {
+          loadWines().then(() => {
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof renderLager === 'function') renderLager();
+          }).catch(() => {
+            // Opdater alligevel med eksisterende data
+            if (typeof updateDashboard === 'function') updateDashboard();
+            if (typeof renderLager === 'function') renderLager();
+          });
+        }
+      }, 2000);
+    });
   }
   
-  // OPDATER LAGER DATA - så dashboard og tabel opdateres efter scanning
-  // Vent lidt så backend har tid til at gemme data
-  setTimeout(() => {
-    if (typeof loadWines === 'function') {
-      loadWines().then(() => {
-        // SIKR at dashboard og tabel opdateres
-        if (typeof updateDashboard === 'function') updateDashboard();
-        if (typeof renderLager === 'function') renderLager();
-      }).catch((err) => {
-        console.error('Fejl ved opdatering:', err);
-        // Hvis fejl, prøv alligevel at opdatere med eksisterende data
-        if (typeof updateDashboard === 'function') updateDashboard();
-        if (typeof renderLager === 'function') renderLager();
-      });
-    }
-  }, 1500); // Vent 1.5 sekunder for at backend kan gemme
-  
-  // FJERNET: Grøn notifikation der forstyrrer - rapporter opdateres automatisk i stedet
-  // Fjern flag hvis det er sat (for at undgå at det bliver vist igen)
+  // Fjern flag hvis det er sat
   if (localStorage.getItem('newReportAvailable') === 'true') {
     localStorage.removeItem('newReportAvailable');
   }
