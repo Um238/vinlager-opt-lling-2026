@@ -455,7 +455,8 @@
             grandTotal += værdi;
             grandCount++;
             doc.setFont(undefined, 'bold');
-            doc.text(`★ ${w.vinId} | ${w.navn || ''} | ${w.antal || 0} | ${pris.toFixed(2)} kr`, 14, y);
+            const varenummer = w.varenummer || w.vinId || '';
+            doc.text(`* ${varenummer} | ${w.navn || ''} | ${w.antal || 0} | ${pris.toFixed(2)} kr`, 14, y);
             doc.setFont(undefined, 'normal');
             y += 6;
           });

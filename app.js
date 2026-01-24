@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v72
+// VINLAGER OPTÆLLING 2026 - APP.JS v73
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v72 - KRITISK FIX: Opdateringer fra mobil virker, dashboard og tabel opdaterer korrekt, lav lager vises');
+console.log('Version: v73 - KOMPLET FIX: Varenummer i rapporter, opdateringer virker, dashboard og tabel opdaterer korrekt');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2688,7 +2688,7 @@ async function generateFullReportPDF(report) {
       antal: winesByLocation[loc].length
     })));
     
-    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
     
     let grandTotalVærdi = 0;
@@ -2744,12 +2744,13 @@ async function generateFullReportPDF(report) {
         locationWineCount++;
         
         x = 14;
-        // Tilføj TYDELIG markering for optalte vine - brug fed skrift og stjerne
-        const vinIdMarked = '★ ' + (wine.vinId || '');
+        // KRITISK FIX: Brug varenummer i stedet for vinId, og brug * i stedet for ★ for at undgå encoding problemer
+        const varenummer = wine.varenummer || wine.vinId || '';
+        const varenummerMarked = '* ' + varenummer;
         // Markér hele rækken med fed skrift for optalte vine
         doc.setFont(undefined, 'bold');
         const row = [
-          vinIdMarked,
+          varenummerMarked,
           wine.navn || '',
           wine.type || '',
           wine.land || '',
@@ -2942,7 +2943,7 @@ async function generateFullReportPDFForDownload(report) {
       antal: winesByLocation[loc].length
     })));
     
-    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
     
     let grandTotalVærdi = 0;
@@ -2998,12 +2999,13 @@ async function generateFullReportPDFForDownload(report) {
         locationWineCount++;
         
         x = 14;
-        // Tilføj TYDELIG markering for optalte vine - brug fed skrift og stjerne
-        const vinIdMarked = '★ ' + (wine.vinId || '');
+        // KRITISK FIX: Brug varenummer i stedet for vinId, og brug * i stedet for ★ for at undgå encoding problemer
+        const varenummer = wine.varenummer || wine.vinId || '';
+        const varenummerMarked = '* ' + varenummer;
         // Markér hele rækken med fed skrift for optalte vine
         doc.setFont(undefined, 'bold');
         const row = [
-          vinIdMarked,
+          varenummerMarked,
           wine.navn || '',
           wine.type || '',
           wine.land || '',
@@ -3247,7 +3249,7 @@ async function generateLagerReport() {
     y += 10;
 
     // Kun de vigtigste kolonner: VIN-ID, Navn, Type, Land, Antal, Min, Pris
-    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
     let x = 14;
 
@@ -3353,7 +3355,7 @@ async function generateLagerReportDownload() {
     doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
     y += 10;
 
-    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
     let x = 14;
 
@@ -3383,8 +3385,10 @@ async function generateLagerReportDownload() {
       totalVærdi += værdi;
 
       x = 14;
+      // KRITISK FIX: Brug varenummer i stedet for vinId
+      const varenummer = wine.varenummer || wine.vinId || '';
       const row = [
-        wine.vinId || '',
+        varenummer,
         wine.navn || '',
         wine.type || '',
         wine.land || '',
@@ -3447,7 +3451,7 @@ async function generateLagerReportViewOnly() {
   doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
   y += 10;
 
-  const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+  const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
   const colWidths = [30, 60, 25, 25, 15, 15, 30];
   let x = 14;
 
@@ -3689,7 +3693,7 @@ async function generateVærdiReportPDF(report, download = false) {
   doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
   y += 10;
 
-  const headers = ['VIN-ID', 'Navn', 'Antal', 'Pris', 'Værdi'];
+  const headers = ['Varenummer', 'Navn', 'Antal', 'Pris', 'Værdi'];
   const colWidths = [30, 70, 20, 30, 30];
   let x = 14;
 
@@ -3708,8 +3712,10 @@ async function generateVærdiReportPDF(report, download = false) {
 
     x = 14;
     const værdi = (wine.antal || 0) * (wine.indkøbspris || 0);
+    // KRITISK FIX: Brug varenummer i stedet for vinId
+    const varenummer = wine.varenummer || wine.vinId || '';
     const row = [
-      wine.vinId || '',
+      varenummer,
       wine.navn || '',
       wine.antal || 0,
       (wine.indkøbspris || 0).toFixed(2),
@@ -4110,7 +4116,7 @@ async function finishCounting() {
     doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
     y += 10;
     
-    const headers = ['VIN-ID', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
+    const headers = ['Varenummer', 'Navn', 'Type', 'Land', 'Antal', 'Min', 'Pris'];
     const colWidths = [30, 60, 25, 25, 15, 15, 30];
     let x = 14;
     
@@ -4140,8 +4146,10 @@ async function finishCounting() {
       totalVærdi += værdi;
       
       x = 14;
+      // KRITISK FIX: Brug varenummer i stedet for vinId
+      const varenummer = wine.varenummer || wine.vinId || '';
       const row = [
-        wine.vinId || '',
+        varenummer,
         wine.navn || '',
         wine.type || '',
         wine.land || '',
