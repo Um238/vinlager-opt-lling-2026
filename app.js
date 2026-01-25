@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v77
+// VINLAGER OPTÆLLING 2026 - APP.JS v78
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v77 - FIX: generateLavStatusRapport virker nu med bedre fejlhåndtering');
+console.log('Version: v78 - SIMPLIFICERET generateLavStatusRapport med omfattende logging');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -3225,58 +3225,80 @@ async function unarchiveReport(reportId) {
 
 // Generer lav status rapport (gem i tabellen uden at vise/download)
 async function generateLavStatusRapport() {
+  console.log('=== GENERER LAV STATUS RAPPORT START ===');
+  
   try {
-    console.log('📊 Genererer lav status rapport...');
-    
-    // Vis besked om at rapport genereres
-    if (typeof showSuccess === 'function') {
-      showSuccess('Genererer rapport...');
-    } else {
-      alert('Genererer rapport...');
+    // Tjek at alle nødvendige funktioner findes
+    if (typeof apiCall !== 'function') {
+      throw new Error('apiCall funktion ikke fundet');
+    }
+    if (typeof toLocalDateTimeString !== 'function') {
+      throw new Error('toLocalDateTimeString funktion ikke fundet');
+    }
+    if (typeof formatDanskPris !== 'function') {
+      throw new Error('formatDanskPris funktion ikke fundet');
     }
     
+    console.log('✅ Alle nødvendige funktioner fundet');
+    
+    // Vis besked
+    alert('Genererer rapport...');
+    
+    // Hent vine
+    console.log('📡 Henter vine fra /api/reports/lager...');
     let wines = [];
     try {
       wines = await apiCall('/api/reports/lager');
-      console.log('📦 Hentet vine fra backend:', wines ? wines.length : 0);
+      console.log('📦 Svar fra backend:', wines);
+      console.log('📦 Antal vine:', wines ? wines.length : 0);
     } catch (apiError) {
-      console.error('❌ Fejl ved hentning af vine:', apiError);
-      const errorMsg = apiError.message || 'Kunne ikke hente data fra server';
-      if (typeof showError === 'function') {
-        showError(`Fejl: ${errorMsg}. Tjek console for detaljer.`);
-      } else {
-        alert(`FEJL: ${errorMsg}`);
-      }
+      console.error('❌ API FEJL:', apiError);
+      alert('FEJL ved hentning af data: ' + (apiError.message || 'Ukendt fejl'));
       return;
     }
     
-    if (!wines || !Array.isArray(wines) || wines.length === 0) {
-      console.warn('⚠️ Ingen vine fundet i backend');
-      const msg = 'Ingen vine fundet. Tjek om lageret indeholder data. Prøv at importere data først.';
-      if (typeof showError === 'function') {
-        showError(msg);
-      } else {
-        alert(msg);
-      }
+    if (!wines) {
+      console.warn('⚠️ wines er null/undefined');
+      alert('Ingen data modtaget fra server');
       return;
     }
+    
+    if (!Array.isArray(wines)) {
+      console.warn('⚠️ wines er ikke en array:', typeof wines, wines);
+      alert('Data fra server er ikke korrekt format');
+      return;
+    }
+    
+    if (wines.length === 0) {
+      console.warn('⚠️ Ingen vine i array');
+      alert('Ingen vine fundet. Importer data først.');
+      return;
+    }
+    
+    console.log('✅', wines.length, 'vine fundet');
     
     // Beregn total værdi
     let totalVærdi = 0;
-    wines.forEach(w => {
+    wines.forEach((w, i) => {
       const antal = parseInt(w.antal) || 0;
       const pris = parseFloat(w.indkøbspris) || 0;
-      totalVærdi += antal * pris;
+      const værdi = antal * pris;
+      totalVærdi += værdi;
+      if (i < 3) {
+        console.log(`  Vin ${i+1}: antal=${antal}, pris=${pris}, værdi=${værdi}`);
+      }
     });
     
     console.log(`💰 Total værdi: ${totalVærdi}`);
     
+    // Opret rapport objekt
     const dateStr = toLocalDateTimeString();
+    const reportId = Date.now().toString();
     
     const report = {
-      reportId: Date.now().toString(),
+      reportId: reportId,
       date: dateStr,
-      name: 'OPTA-' + Date.now().toString().slice(-6),
+      name: 'OPTA-' + reportId.slice(-6),
       type: 'lager',
       wineCount: wines.length,
       totalValue: totalVærdi,
@@ -3284,12 +3306,12 @@ async function generateLavStatusRapport() {
       archived: false
     };
     
-    console.log('💾 Gemmer rapport:', report);
+    console.log('💾 Rapport objekt:', report);
     
-    // KRITISK: Gem ALTID i localStorage FØRST (sikker backup)
-    const reportForLocalStorage = {
+    // SIKKER: Gem i localStorage FØRST
+    const reportForStorage = {
       id: report.reportId,
-      date: dateStr,
+      date: report.date,
       name: report.name,
       type: report.type,
       wineCount: report.wineCount,
@@ -3298,34 +3320,51 @@ async function generateLavStatusRapport() {
       archived: report.archived
     };
     
-    // Tilføj til lokal historik FØRST
-    if (!Array.isArray(reportsHistory)) {
-      reportsHistory = [];
-    }
-    reportsHistory.unshift(reportForLocalStorage);
-    if (reportsHistory.length > 200) { // Øget til 200 for bedre backup
-      reportsHistory = reportsHistory.slice(0, 200);
-    }
-    
-    // Gem i localStorage FØRST
+    // Hent eksisterende rapporter
+    let existingReports = [];
     try {
-      localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
-      console.log('✅ Rapport gemt i localStorage backup');
-    } catch (storageError) {
-      console.error('❌ Fejl ved gemning i localStorage:', storageError);
-      // Fortsæt alligevel
+      const saved = localStorage.getItem('reportsHistory');
+      if (saved) {
+        existingReports = JSON.parse(saved);
+        if (!Array.isArray(existingReports)) {
+          existingReports = [];
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Fejl ved læsning af localStorage:', e);
+      existingReports = [];
     }
     
-    // Prøv at gemme i backend (men fortsæt selv hvis det fejler)
+    // Tilføj ny rapport
+    existingReports.unshift(reportForStorage);
+    if (existingReports.length > 200) {
+      existingReports = existingReports.slice(0, 200);
+    }
+    
+    // Gem i localStorage
+    try {
+      localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
+      console.log('✅ Gemt i localStorage:', existingReports.length, 'rapporter');
+    } catch (e) {
+      console.error('❌ Fejl ved gemning i localStorage:', e);
+      alert('FEJL: Kunne ikke gemme i localStorage');
+      return;
+    }
+    
+    // Opdater global variabel
+    if (typeof reportsHistory !== 'undefined') {
+      reportsHistory = existingReports;
+    }
+    
+    // Prøv at gemme i backend (ikke kritisk)
     try {
       await apiCall('/api/reports/save', {
         method: 'POST',
         body: JSON.stringify(report)
       });
-      console.log('✅ Rapport gemt i backend');
-    } catch (error) {
-      console.error('⚠️ Fejl ved gemning i backend (fortsætter alligevel):', error);
-      // Fortsæt alligevel - vi har gemt i localStorage
+      console.log('✅ Gemt i backend');
+    } catch (e) {
+      console.warn('⚠️ Kunne ikke gemme i backend (fortsætter alligevel):', e);
     }
     
     // Opdater UI
@@ -3333,33 +3372,47 @@ async function generateLavStatusRapport() {
       if (typeof showBackupStatus === 'function') {
         showBackupStatus();
       }
+    } catch (e) {
+      console.warn('⚠️ showBackupStatus fejlede:', e);
+    }
+    
+    try {
       if (typeof updateLocationFilter === 'function') {
         updateLocationFilter();
       }
+    } catch (e) {
+      console.warn('⚠️ updateLocationFilter fejlede:', e);
+    }
+    
+    try {
       if (typeof renderReportsTable === 'function') {
         renderReportsTable();
       }
-    } catch (uiError) {
-      console.error('⚠️ Fejl ved opdatering af UI:', uiError);
-      // Fortsæt alligevel
+    } catch (e) {
+      console.warn('⚠️ renderReportsTable fejlede:', e);
     }
     
+    // Vis success
     const successMsg = `Rapport genereret! ${wines.length} vine, ${formatDanskPris(totalVærdi)} kr.`;
-    console.log('✅', successMsg);
+    console.log('✅ SUCCESS:', successMsg);
+    alert(successMsg);
+    
     if (typeof showSuccess === 'function') {
       showSuccess(successMsg);
-    } else {
-      alert(successMsg);
     }
+    
   } catch (error) {
-    console.error('❌ Fejl ved generering af rapport:', error);
-    const errorMsg = 'Kunne ikke generere rapport: ' + (error.message || 'Ukendt fejl');
+    console.error('❌ KRITISK FEJL:', error);
+    console.error('❌ Stack trace:', error.stack);
+    const errorMsg = 'FEJL: ' + (error.message || 'Ukendt fejl');
+    alert(errorMsg);
+    
     if (typeof showError === 'function') {
       showError(errorMsg);
-    } else {
-      alert('FEJL: ' + errorMsg);
     }
   }
+  
+  console.log('=== GENERER LAV STATUS RAPPORT SLUT ===');
 }
 
 async function generateLagerReport() {
