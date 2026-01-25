@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v97
+// VINLAGER OPTÆLLING 2026 - APP.JS v98
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v97 - FIX: Labels/QR koder for Øl & Vand + Status rapport knap i rapporter sektion');
+console.log('Version: v98 - FIX: Login funktionalitet + Bedre fejlhåndtering + Auth tjek');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -105,7 +105,8 @@ function startAutoUpdate() {
   
   // Start nyt interval - opdater hver 10 sekunder (mindre aggressivt for at undgå spam)
   autoUpdateInterval = setInterval(() => {
-    if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
+    const authObj = auth || window.auth;
+    if (authObj && authObj.isLoggedIn && authObj.isLoggedIn()) {
       // KRITISK: Stop hvis for mange fejl i træk
       if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         console.warn('⚠️ For mange fejl i træk - stopper auto-opdatering');
@@ -215,25 +216,69 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Vent lidt så alle scripts er indlæst
   setTimeout(() => {
     // Initialiser auth system først
-    if (typeof auth !== 'undefined' && auth.initUsersStorage) {
-      auth.initUsersStorage();
+    console.log('🔐 Initialiserer auth system...');
+    const authObj = auth || window.auth;
+    
+    if (typeof authObj !== 'undefined' && authObj && authObj.initUsersStorage) {
+      authObj.initUsersStorage();
+      console.log('✅ Auth system initialiseret');
     } else {
-      console.error('auth.js ikke indlæst!');
+      console.error('❌ auth.js ikke indlæst eller initUsersStorage mangler!');
+      console.log('  typeof auth:', typeof auth);
+      console.log('  typeof window.auth:', typeof window.auth);
+      console.log('  auth:', auth);
+      console.log('  window.auth:', window.auth);
+      
       const errorDiv = document.getElementById('login-error');
       if (errorDiv) {
-        errorDiv.textContent = 'Fejl: auth.js kunne ikke indlæses. Tjek browser console.';
+        errorDiv.textContent = 'Fejl: auth.js kunne ikke indlæses. Genindlæs siden (Ctrl+Shift+R).';
         errorDiv.style.display = 'block';
       }
+      
+      // Prøv at vente lidt og tjek igen
+      setTimeout(() => {
+        const retryAuth = auth || window.auth;
+        if (typeof retryAuth !== 'undefined' && retryAuth && retryAuth.initUsersStorage) {
+          retryAuth.initUsersStorage();
+          console.log('✅ Auth system initialiseret (retry)');
+          if (errorDiv) {
+            errorDiv.style.display = 'none';
+          }
+        }
+      }, 1000);
     }
     
-    // Tjek login status
-    checkLoginStatus();
-    
-    setupNavigation();
+    // KRITISK: Vent lidt så auth.js er helt indlæst
+    setTimeout(() => {
+      // Tjek login status
+      checkLoginStatus();
+      
+      setupNavigation();
+      
+      // Sikr at login form handler er sat op
+      const loginForm = document.getElementById('login-form');
+      if (loginForm) {
+        // Fjern eksisterende handlers for at undgå duplikater
+        const newForm = loginForm.cloneNode(true);
+        loginForm.parentNode.replaceChild(newForm, loginForm);
+        
+        // Tilføj ny handler
+        const form = document.getElementById('login-form');
+        if (form) {
+          form.onsubmit = function(e) {
+            e.preventDefault();
+            handleLogin(e);
+            return false;
+          };
+          console.log('✅ Login form handler sat op');
+        }
+      }
+    }, 100);
     
     // KRITISK: Load data MED DET SAMME hvis logget ind
     console.log('🔍 Tjekker login status...');
-    if (typeof auth !== 'undefined' && auth && auth.isLoggedIn && auth.isLoggedIn()) {
+    const authObj = auth || window.auth;
+    if (typeof authObj !== 'undefined' && authObj && authObj.isLoggedIn && authObj.isLoggedIn()) {
       console.log('✅ Bruger er logget ind - loader data NU...');
       // Load data med det samme
       if (typeof loadWines === 'function') {
@@ -290,9 +335,11 @@ function checkLoginStatus() {
     return;
   }
   
-  // Tjek om auth er tilgængelig
-  if (typeof auth === 'undefined' || !auth) {
-    console.error('auth ikke defineret! Tjek at auth.js er indlæst.');
+  // Tjek om auth er tilgængelig (prøv både auth og window.auth)
+  const authObj = auth || window.auth;
+  
+  if (typeof authObj === 'undefined' || !authObj) {
+    console.error('❌ auth ikke defineret! Tjek at auth.js er indlæst.');
     // Vis login screen hvis auth ikke er tilgængelig
     loginScreen.style.display = 'flex';
     mainHeader.style.display = 'none';
@@ -301,13 +348,13 @@ function checkLoginStatus() {
     // Vis fejlbesked
     const errorDiv = document.getElementById('login-error');
     if (errorDiv) {
-      errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Tjek browser console.';
+      errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Genindlæs siden (Ctrl+Shift+R).';
       errorDiv.style.display = 'block';
     }
     return;
   }
   
-  if (auth.isLoggedIn && auth.isLoggedIn()) {
+  if (authObj.isLoggedIn && authObj.isLoggedIn()) {
     // Bruger er logget ind - vis app
     loginScreen.style.display = 'none';
     mainHeader.style.display = 'block';
@@ -328,13 +375,22 @@ function checkLoginStatus() {
 
 // Handle login
 function handleLogin(event) {
-  event.preventDefault();
+  if (event) {
+    event.preventDefault();
+  }
+  
+  console.log('🔐 handleLogin() kaldt');
+  
   const usernameInput = document.getElementById('login-username');
   const passwordInput = document.getElementById('login-password');
   const errorDiv = document.getElementById('login-error');
   
   if (!usernameInput || !passwordInput) {
-    console.error('Login input felter ikke fundet!');
+    console.error('❌ Login input felter ikke fundet!');
+    if (errorDiv) {
+      errorDiv.textContent = 'Fejl: Login formular ikke fundet. Genindlæs siden.';
+      errorDiv.style.display = 'block';
+    }
     return;
   }
   
@@ -342,51 +398,56 @@ function handleLogin(event) {
   const password = passwordInput.value;
   
   if (!errorDiv) {
-    console.error('Error div ikke fundet!');
+    console.error('❌ Error div ikke fundet!');
+    alert('Fejl: Login fejlbesked område ikke fundet. Genindlæs siden.');
     return;
   }
   
-  // Tjek om auth er tilgængelig
-  if (typeof auth === 'undefined' || !auth) {
-    errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Tjek at auth.js er indlæst korrekt.';
-    errorDiv.style.display = 'block';
-    console.error('auth ikke defineret!');
-    return;
-  }
-  
-  if (!auth.login) {
-    errorDiv.textContent = 'Fejl: Login funktion ikke tilgængelig. Tjek at auth.js er indlæst korrekt.';
-    errorDiv.style.display = 'block';
-    console.error('auth.login ikke defineret!');
-    return;
-  }
-  
-  // Valider input
+  // Valider input først
   if (!username || !password) {
     errorDiv.textContent = 'Indtast venligst både brugernavn og password.';
     errorDiv.style.display = 'block';
     return;
   }
   
-  try {
-    // Tjek om auth er klar
-    if (typeof auth === 'undefined' || !auth || !auth.login) {
-      errorDiv.textContent = 'Fejl: Authentication system ikke klar. Vent venligst et øjeblik og prøv igen.';
-      errorDiv.style.display = 'block';
-      console.error('auth ikke klar:', typeof auth, auth);
-      
-      // Prøv igen efter 1 sekund
-      setTimeout(() => {
-        if (typeof auth !== 'undefined' && auth && auth.login) {
-          handleLogin(event);
-        }
-      }, 1000);
-      return;
-    }
+  // Tjek om auth er tilgængelig
+  console.log('🔍 Tjekker auth objekt...');
+  console.log('  typeof auth:', typeof auth);
+  console.log('  window.auth:', typeof window.auth);
+  console.log('  auth:', auth);
+  
+  // Prøv både auth og window.auth
+  const authObj = auth || window.auth;
+  
+  if (typeof authObj === 'undefined' || !authObj) {
+    errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Vent venligst et øjeblik og prøv igen.';
+    errorDiv.style.display = 'block';
+    console.error('❌ auth ikke defineret! Prøver igen om 1 sekund...');
     
-    const result = auth.login(username, password);
+    // Prøv igen efter 1 sekund
+    setTimeout(() => {
+      console.log('🔄 Prøver login igen...');
+      handleLogin(null); // Prøv igen uden event
+    }, 1000);
+    return;
+  }
+  
+  if (!authObj.login) {
+    errorDiv.textContent = 'Fejl: Login funktion ikke tilgængelig. Genindlæs siden (Ctrl+Shift+R).';
+    errorDiv.style.display = 'block';
+    console.error('❌ auth.login ikke defineret!');
+    console.log('  authObj keys:', Object.keys(authObj || {}));
+    return;
+  }
+  
+  console.log('✅ Auth objekt fundet, kalder login...');
+  
+  try {
+    const result = authObj.login(username, password);
+    console.log('📥 Login resultat:', result);
     
     if (result && result.success) {
+      console.log('✅ Login succesfuld!');
       // Ryd fejlbesked
       errorDiv.style.display = 'none';
       errorDiv.textContent = '';
@@ -401,19 +462,27 @@ function handleLogin(event) {
       setTimeout(() => {
         if (typeof loadWines === 'function') {
           loadWines();
-          // Start auto-opdatering efter login
+        }
+        if (typeof loadOlVand === 'function') {
+          loadOlVand();
+        }
+        // Start auto-opdatering efter login
+        if (typeof startAutoUpdate === 'function') {
           startAutoUpdate();
         }
       }, 100);
     } else {
+      console.warn('⚠️ Login fejlede:', result?.error);
       errorDiv.textContent = result?.error || 'Login fejlede. Tjek brugernavn og password.';
       errorDiv.style.display = 'block';
       // Ryd password felt ved fejl
       passwordInput.value = '';
+      // Fokusér på password felt
+      passwordInput.focus();
     }
   } catch (error) {
-    console.error('Login fejl:', error);
-    errorDiv.textContent = 'Fejl ved login: ' + error.message;
+    console.error('❌ Login exception:', error);
+    errorDiv.textContent = 'Fejl ved login: ' + (error.message || 'Ukendt fejl');
     errorDiv.style.display = 'block';
     // Ryd password felt ved fejl
     passwordInput.value = '';
@@ -439,8 +508,9 @@ function showPasswordReset() {
   const emailOrUsername = prompt('Indtast din email eller brugernavn:');
   if (!emailOrUsername) return;
   
-  if (auth && auth.requestPasswordReset) {
-    const result = auth.requestPasswordReset(emailOrUsername);
+  const authObj = auth || window.auth;
+  if (authObj && authObj.requestPasswordReset) {
+    const result = authObj.requestPasswordReset(emailOrUsername);
     alert(result.message || 'Hvis emailen/brugernavnet findes, er et reset link sendt.\n\nKontakt admin for at få password nulstillet.');
   } else {
     alert('Password reset funktion ikke tilgængelig. Kontakt admin.');
@@ -2619,29 +2689,7 @@ function tryCanvasGeneration(container, text, qrLib) {
   }
 }
 
-async function generateLabels() {
-  const lokationFilter = document.getElementById('label-lokation').value;
-  const reolFilter = document.getElementById('label-reol').value;
-  const hyldeFilter = document.getElementById('label-hylde').value;
-
-  let filtered = allWines;
-
-  if (lokationFilter) {
-    filtered = filtered.filter(w => w.lokation === lokationFilter);
-  }
-  if (reolFilter) {
-    filtered = filtered.filter(w => w.reol === reolFilter);
-  }
-  if (hyldeFilter) {
-    filtered = filtered.filter(w => w.hylde === hyldeFilter);
-  }
-
-  const container = document.getElementById(containerId);
-  if (!container) {
-    console.error(`Container ${containerId} ikke fundet!`);
-    return;
-  }
-  container.innerHTML = '';
+// DENNE FUNKTION ER FLYTTET TIL LINJE 2692 - SE DEN NYE VERSION MED category PARAMETER
 
   filtered.forEach((item, index) => {
     const wine = item; // For kompatibilitet
@@ -2894,12 +2942,6 @@ function printLabels(category = 'vin') {
   
   if (container.children.length === 0) {
     alert(`Ingen labels genereret endnu. Klik på "Generer labels" først.`);
-    return;
-  }
-  const containerId = category === 'ol-vand' ? 'labels-container-ol-vand' : 'labels-container';
-  const container = document.getElementById(containerId);
-  if (!container || container.children.length === 0) {
-    showError('Ingen labels at printe. Generer labels først.');
     return;
   }
   
