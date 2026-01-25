@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v92
+// VINLAGER OPTÆLLING 2026 - APP.JS v93
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v92 - FIX: Øl & Vand Excel skabelon med alle kolonner + realistiske priser og lokationer');
+console.log('Version: v93 - FIX: Import fejlhåndtering + Authentication headers + Reducer API spam (400 fejl)');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -90,19 +90,33 @@ function formatDanskPris(amount) {
 // Auto-opdatering variabel
 let autoUpdateInterval = null;
 
-// Start auto-opdatering (polling hver 5 sekunder)
+// Start auto-opdatering (polling hver 10 sekunder)
+let consecutiveErrors = 0;
+const MAX_CONSECUTIVE_ERRORS = 3;
+
 function startAutoUpdate() {
   // Stop eksisterende interval hvis der er et
   if (autoUpdateInterval) {
     clearInterval(autoUpdateInterval);
   }
   
-  // Start nyt interval - opdater hver 3 sekunder (mere aggressivt for at fange opdateringer)
+  // Reset error counter
+  consecutiveErrors = 0;
+  
+  // Start nyt interval - opdater hver 10 sekunder (mindre aggressivt for at undgå spam)
   autoUpdateInterval = setInterval(() => {
     if (auth && auth.isLoggedIn && auth.isLoggedIn()) {
+      // KRITISK: Stop hvis for mange fejl i træk
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        console.warn('⚠️ For mange fejl i træk - stopper auto-opdatering');
+        clearInterval(autoUpdateInterval);
+        return;
+      }
+      
       // OPDATER ALTID LAGER DATA - så dashboard og tabel opdateres efter scanning
       if (typeof loadWines === 'function') {
         loadWines().then(() => {
+          consecutiveErrors = 0; // Reset ved success
           // FORCE opdater dashboard og tabel - uanset hvad
           if (typeof updateDashboard === 'function') {
             updateDashboard();
@@ -110,7 +124,12 @@ function startAutoUpdate() {
           if (typeof renderLager === 'function') {
             renderLager();
           }
-        }).catch(() => {
+        }).catch((err) => {
+          consecutiveErrors++;
+          // Log kun hver 3. fejl for at undgå spam
+          if (consecutiveErrors % 3 === 0) {
+            console.warn(`⚠️ Auto-update fejl (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, err.message);
+          }
           // Hvis fejl, opdater alligevel med eksisterende data
           if (typeof updateDashboard === 'function') updateDashboard();
           if (typeof renderLager === 'function') renderLager();
@@ -126,7 +145,11 @@ function startAutoUpdate() {
           if (typeof renderOlVandLager === 'function') {
             renderOlVandLager();
           }
-        }).catch(() => {
+        }).catch((err) => {
+          // Log kun hver 3. fejl
+          if (consecutiveErrors % 3 === 0) {
+            console.warn('⚠️ Auto-update Øl & Vand fejl:', err.message);
+          }
           if (typeof updateDashboardOlVand === 'function') updateDashboardOlVand();
           if (typeof renderOlVandLager === 'function') renderOlVandLager();
         });
@@ -141,9 +164,9 @@ function startAutoUpdate() {
       // Tjek for ny rapport fra mobil
       checkForNewReport();
     }
-  }, 5000); // 5 sekunder - giv backend tid til at gemme data fra mobil scanning
+  }, 10000); // Opdater hver 10 sekunder (mindre spam)
   
-  console.log('✅ Auto-opdatering startet (hver 5 sekunder)');
+  console.log('✅ Auto-opdatering startet (hver 10 sekunder)');
 }
 
 // Stop auto-opdatering
@@ -877,6 +900,14 @@ function downloadLagerBackupCSV() {
 async function loadWines() {
   try {
     console.log('🔄 Henter VIN fra backend...');
+    
+    // KRITISK: Tjek authentication først
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+    if (!token) {
+      console.warn('⚠️ Ingen auth token - springer loadWines over');
+      return;
+    }
+    
     const allProducts = await apiCall('/api/wines');
     console.log('📦 Modtaget fra backend:', allProducts ? allProducts.length : 0, 'produkter');
     
@@ -2385,34 +2416,79 @@ async function doImport(category = 'vin') {
   try {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const endpoint = isExcel ? '/api/import/excel' : '/api/import/csv';
+    
+    // KRITISK: Hent auth token for authentication
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    console.log(`📤 Uploader til ${endpoint} med kategori: ${category}, mode: ${mode}`);
 
     const response = await fetch(`${getConfig().API_URL}${endpoint}`, {
       method: 'POST',
+      headers: headers, // IKKE sæt Content-Type - browser sætter det automatisk med boundary for FormData
       body: formData
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Import fejlede');
+      let errorMessage = 'Import fejlede';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || `HTTP ${response.status}`;
+      } catch (e) {
+        // Hvis response ikke er JSON, prøv at læse som tekst
+        try {
+          const errorText = await response.text();
+          errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (e2) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+      }
+      console.error('❌ Import fejl:', errorMessage);
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
     
-    document.getElementById('import-results').style.display = 'block';
-    document.getElementById('import-results-content').innerHTML = `
-      <div class="success-message">
-        <p><strong>Import gennemført!</strong></p>
-        <p>Importeret: ${result.importeret || 0}</p>
-        <p>Opdateret: ${result.opdateret || 0}</p>
-        ${result.fejl && result.fejl.length > 0 ? `<p>Fejl: ${result.fejl.length}</p>` : ''}
-        <p style="margin-top: 10px; color: #4CAF50;"><strong>✅ Varelageret er nu opdateret!</strong></p>
-      </div>
-    `;
+    // KRITISK FIX: Brug korrekte element IDs baseret på kategori
+    const resultsDiv = document.getElementById(resultsDivId);
+    let resultsContent = document.getElementById(resultsContentId);
+    
+    // Opret element hvis det mangler
+    if (!resultsContent && resultsDiv) {
+      resultsContent = document.createElement('div');
+      resultsContent.id = resultsContentId;
+      resultsDiv.appendChild(resultsContent);
+    }
+    
+    if (resultsDiv) {
+      resultsDiv.style.display = 'block';
+    }
+    if (resultsContent) {
+      resultsContent.innerHTML = `
+        <div class="success-message">
+          <p><strong>Import gennemført!</strong></p>
+          <p>Importeret: ${result.importeret || 0}</p>
+          <p>Opdateret: ${result.opdateret || 0}</p>
+          ${result.fejl && result.fejl.length > 0 ? `<p>Fejl: ${result.fejl.length}</p>` : ''}
+          <p style="margin-top: 10px; color: #4CAF50;"><strong>✅ Varelageret er nu opdateret!</strong></p>
+        </div>
+      `;
+    }
 
-    // Reload wines - FORCE refresh fra backend
+    // Reload data - FORCE refresh fra backend
     console.log('🔄 Genindlæser varelager efter import...');
-    await loadWines();
-    renderLager();
+    if (category === 'ol-vand') {
+      await loadOlVand();
+      renderOlVandLager();
+      updateDashboardOlVand();
+    } else {
+      await loadWines();
+      renderLager();
+      updateDashboard();
+    }
     console.log('✅ Varelager genindlæst');
   } catch (error) {
     const resultsDiv = document.getElementById(resultsDivId);
