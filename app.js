@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v98 - FIX: Login funktionalitet + Bedre fejlhåndtering + Auth tjek');
+console.log('Version: v98 - FIX: authObj duplikeret deklaration + Login funktionalitet');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // KRITISK: Load data MED DET SAMME hvis logget ind
     console.log('🔍 Tjekker login status...');
-    const authObj = auth || window.auth;
+    // Brug samme authObj som deklarerede tidligere i denne scope
     if (typeof authObj !== 'undefined' && authObj && authObj.isLoggedIn && authObj.isLoggedIn()) {
       console.log('✅ Bruger er logget ind - loader data NU...');
       // Load data med det samme
