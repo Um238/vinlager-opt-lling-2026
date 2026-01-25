@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v103 - FIX: Label filtre for Øl & Vand + Scanner kategori check + Auto-update persistence');
+console.log('Version: v104 - FIX: Data fastholdelse for Øl & Vand + Scrolling på labels + Status rapport backup');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -5488,6 +5488,21 @@ async function loadOlVand() {
     }
   } catch (error) {
     console.error('❌ Fejl ved indlæsning af Øl & Vand:', error.message);
+    
+    // KRITISK: Prøv at restore fra backup hvis allOlVand er tom
+    if ((!allOlVand || allOlVand.length === 0)) {
+      try {
+        const backup = localStorage.getItem('olVandBackup');
+        if (backup) {
+          const restored = JSON.parse(backup);
+          allOlVand = restored;
+          console.log(`✅ Gendannet ${allOlVand.length} Øl & Vand produkter fra backup`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Kunne ikke restore Øl & Vand backup:', e);
+      }
+    }
+    
     if (allOlVand && allOlVand.length > 0) {
       console.warn(`⚠️ API fejl, men beholder ${allOlVand.length} eksisterende produkter.`);
     }
@@ -5856,9 +5871,24 @@ async function generateLavStatusRapportOlVand() {
   console.log('=== GENERER LAV STATUS RAPPORT ØL & VAND START ===');
   
   try {
-    // Hent Øl & Vand data
+    // KRITISK: Prøv først at bruge eksisterende data
     if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
-      await loadOlVand();
+      // Prøv at restore fra backup først
+      try {
+        const backup = localStorage.getItem('olVandBackup');
+        if (backup) {
+          const restored = JSON.parse(backup);
+          allOlVand = restored;
+          console.log(`✅ Brugte ${allOlVand.length} Øl & Vand produkter fra backup`);
+        }
+      } catch (e) {
+        console.warn('⚠️ Kunne ikke restore backup:', e);
+      }
+      
+      // Hvis stadig tom, prøv at hente fra backend
+      if (!allOlVand || allOlVand.length === 0) {
+        await loadOlVand();
+      }
     }
     
     if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
