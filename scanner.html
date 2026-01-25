@@ -94,6 +94,15 @@
     }
     .btn-cancel { background: #6c757d; color: white; }
     .btn-save-modal { background: #4CAF50; color: white; }
+    .status-message {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9); color: white; padding: 20px 30px;
+      border-radius: 12px; z-index: 2000; text-align: center;
+      font-size: 1.2em; max-width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .status-message.error { background: rgba(200, 0, 0, 0.9); }
+    .status-message.success { background: rgba(0, 150, 0, 0.9); }
+    .status-message.warning { background: rgba(255, 165, 0, 0.9); }
   </style>
 </head>
 <body>
@@ -112,6 +121,7 @@
       <video id="qr-video" autoplay playsinline muted></video>
       <canvas id="qr-canvas" style="display: none;"></canvas>
       <div class="scan-overlay"></div>
+      <div id="status-message" class="status-message" style="display: none;"></div>
     </div>
     <div class="bottom-controls">
       <button class="finish-btn" onclick="finishCounting()">✅ Afslut optælling</button>
@@ -152,6 +162,27 @@
     let locationsLoaded = false; // Track om lokationer er hentet
     let lastScannedCode = null; // Debounce: sidste scannede kode
     let lastScanTime = 0; // Debounce: tidspunkt for sidste scan
+    
+    // VIS STATUS BESKED PÅ SKÆRMEN
+    function showStatus(message, type = 'info', duration = 3000) {
+      const statusEl = document.getElementById('status-message');
+      if (!statusEl) return;
+      
+      statusEl.textContent = message;
+      statusEl.className = `status-message ${type}`;
+      statusEl.style.display = 'block';
+      
+      if (duration > 0) {
+        setTimeout(() => {
+          statusEl.style.display = 'none';
+        }, duration);
+      }
+    }
+    
+    function hideStatus() {
+      const statusEl = document.getElementById('status-message');
+      if (statusEl) statusEl.style.display = 'none';
+    }
 
     // LUK SCANNER - ALTID VIRKER
     window.closeScanner = function() {
@@ -230,25 +261,48 @@
 
     // HENT LOKATIONER
     async function loadLocations() {
-      const select = document.getElementById('location-select');
-      if (!select) return;
+      showStatus('Henter lokationer...', 'info', 0);
       
-      select.innerHTML = '<option value="">Alle lokationer</option>';
+      const select = document.getElementById('location-select');
+      if (!select) {
+        showStatus('FEJL: Location select ikke fundet', 'error', 5000);
+        locationsLoaded = true;
+        startQRScannerWhenReady();
+        return;
+      }
+      
+      select.innerHTML = '<option value="">Henter lokationer...</option>';
       selectedLocationId = null;
+      locationsLoaded = false;
       
       select.onchange = (e) => {
         selectedLocationId = e.target.value ? parseInt(e.target.value) : null;
-        console.log('📍 Lokation valgt:', selectedLocationId, e.target.value ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer');
       };
       
-      setTimeout(async () => {
-        try {
-          const config = getConfig();
-          const response = await fetch(`${config.API_URL}/api/locations`);
-          if (!response.ok) return;
-          const data = await response.json();
-          if (!Array.isArray(data) || data.length === 0) return;
-          
+      try {
+        const config = getConfig();
+        if (!config || !config.API_URL) {
+          showStatus('FEJL: Backend URL ikke fundet', 'error', 5000);
+          locationsLoaded = true;
+          select.innerHTML = '<option value="">Alle lokationer</option>';
+          startQRScannerWhenReady();
+          return;
+        }
+        
+        showStatus(`Henter lokationer fra ${config.API_URL}...`, 'info', 0);
+        const response = await fetch(`${config.API_URL}/api/locations`);
+        
+        if (!response.ok) {
+          showStatus(`FEJL: Kunne ikke hente lokationer (${response.status})`, 'warning', 5000);
+          locationsLoaded = true;
+          select.innerHTML = '<option value="">Alle lokationer</option>';
+          startQRScannerWhenReady();
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (Array.isArray(data) && data.length > 0) {
           locations = data;
           select.innerHTML = '<option value="">Alle lokationer</option>';
           data.forEach(loc => {
@@ -257,9 +311,23 @@
             o.textContent = loc.name;
             select.appendChild(o);
           });
-             // Fjernet status-besked for at undgå forstyrrelse
-        } catch (e) {}
-      }, 1000);
+          showStatus(`✅ ${data.length} lokationer hentet`, 'success', 2000);
+        } else {
+          showStatus('Ingen lokationer fundet - fortsætter alligevel', 'warning', 3000);
+          select.innerHTML = '<option value="">Alle lokationer</option>';
+        }
+        
+        locationsLoaded = true;
+        setTimeout(() => hideStatus(), 2000);
+        
+        // Start scanner når lokationer er klar
+        startQRScannerWhenReady();
+      } catch (e) {
+        showStatus(`FEJL: ${e.message}`, 'error', 5000);
+        locationsLoaded = true;
+        select.innerHTML = '<option value="">Alle lokationer</option>';
+        startQRScannerWhenReady();
+      }
     }
 
     // START SCANNER - VENT PÅ LOKATIONER
@@ -309,12 +377,13 @@
       const video = document.getElementById('qr-video');
       const canvas = document.getElementById('qr-canvas');
       if (!video || !canvas) {
-        console.error('❌ Video eller canvas element ikke fundet');
+        showStatus('FEJL: Video eller canvas element ikke fundet', 'error', 0);
         return;
       }
       
       try {
-        console.log('📹 Anmoder om kamera adgang...');
+        showStatus('Anmoder om kamera adgang...', 'info', 0);
+        
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' }
         });
@@ -324,32 +393,43 @@
         qrScanning = true;
         
         video.onloadedmetadata = () => {
-          console.log('✅ Kamera metadata indlæst');
+          showStatus('Kamera klar - starter scanning...', 'success', 2000);
           video.play().then(() => {
-            console.log('✅ Video afspiller');
+            hideStatus();
           }).catch(err => {
-            console.error('❌ Fejl ved afspilning af video:', err);
+            showStatus(`FEJL ved afspilning: ${err.message}`, 'error', 5000);
           });
         };
         
         // Prøv at afspille med det samme
         video.play().then(() => {
-          console.log('✅ Video afspiller');
+          hideStatus();
         }).catch(err => {
-          console.error('❌ Fejl ved afspilning af video:', err);
+          showStatus(`FEJL ved afspilning: ${err.message}`, 'error', 5000);
         });
         
         // Start scanning efter kort ventetid - scanFrame håndterer debounce
         setTimeout(() => {
           if (qrScanning && video && video.srcObject) {
             scanFrame();
+          } else {
+            showStatus('FEJL: Scanner ikke startet korrekt', 'error', 5000);
           }
         }, 500);
         
       } catch (error) {
         qrScanning = false;
-        console.error('❌ Kamera fejl:', error.message);
-        alert('Kunne ikke få adgang til kamera. Tjek om kameraet er aktiveret.');
+        let errorMsg = 'Kunne ikke få adgang til kamera.';
+        if (error.name === 'NotAllowedError') {
+          errorMsg = 'Kamera adgang nægtet. Tjek browser indstillinger.';
+        } else if (error.name === 'NotFoundError') {
+          errorMsg = 'Ingen kamera fundet.';
+        } else if (error.name === 'NotReadableError') {
+          errorMsg = 'Kamera er optaget af andet program.';
+        } else {
+          errorMsg = `Kamera fejl: ${error.message}`;
+        }
+        showStatus(errorMsg, 'error', 0);
       }
     }
     
