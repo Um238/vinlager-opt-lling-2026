@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v93
+// VINLAGER OPTÆLLING 2026 - APP.JS v94
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v93 - FIX: Import fejlhåndtering + Authentication headers + Reducer API spam (400 fejl)');
+console.log('Version: v94 - FIX: loadOlVand undefined + Auth token check + Tabel opdatering + Scanner lokationer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -901,11 +901,10 @@ async function loadWines() {
   try {
     console.log('🔄 Henter VIN fra backend...');
     
-    // KRITISK: Tjek authentication først
+    // KRITISK: Prøv at hente data selv uden token (backend kan være åben)
     const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
     if (!token) {
-      console.warn('⚠️ Ingen auth token - springer loadWines over');
-      return;
+      console.warn('⚠️ Ingen auth token - prøver alligevel at hente data');
     }
     
     const allProducts = await apiCall('/api/wines');
@@ -954,6 +953,16 @@ async function loadWines() {
       // KRITISK: Gem backup MED DET SAMME
       await saveWinesBackup(wines);
       console.log('✅ Backup gemt (multi-layer)');
+      
+      // KRITISK: Opdater tabel og dashboard MED DET SAMME
+      if (typeof renderLager === 'function') {
+        renderLager();
+        console.log('✅ Tabel opdateret');
+      }
+      if (typeof updateDashboard === 'function') {
+        updateDashboard();
+        console.log('✅ Dashboard opdateret');
+      }
     } else if (wines === null || (Array.isArray(wines) && wines.length === 0)) {
       // Backend returnerer null eller tom array
       // BEHOLD kun eksisterende data hvis vi har noget OG det er første gang vi loader
@@ -2481,13 +2490,41 @@ async function doImport(category = 'vin') {
     // Reload data - FORCE refresh fra backend
     console.log('🔄 Genindlæser varelager efter import...');
     if (category === 'ol-vand') {
-      await loadOlVand();
-      renderOlVandLager();
-      updateDashboardOlVand();
+      // KRITISK: Tjek om loadOlVand er defineret
+      if (typeof loadOlVand === 'function') {
+        await loadOlVand();
+        if (typeof renderOlVandLager === 'function') {
+          renderOlVandLager();
+        }
+        if (typeof updateDashboardOlVand === 'function') {
+          updateDashboardOlVand();
+        }
+      } else {
+        console.error('❌ loadOlVand er ikke defineret!');
+        // Prøv at hente data direkte
+        try {
+          const allProducts = await apiCall('/api/wines');
+          const olVand = (allProducts || []).filter(p => {
+            const kategori = (p.kategori || p.type || '').toLowerCase();
+            const vinId = (p.vinId || '').toLowerCase();
+            return vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId) ||
+                   kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand');
+          });
+          allOlVand = olVand;
+          if (typeof renderOlVandLager === 'function') renderOlVandLager();
+          if (typeof updateDashboardOlVand === 'function') updateDashboardOlVand();
+        } catch (e) {
+          console.error('❌ Fejl ved direkte hentning af Øl & Vand:', e);
+        }
+      }
     } else {
       await loadWines();
-      renderLager();
-      updateDashboard();
+      if (typeof renderLager === 'function') {
+        renderLager();
+      }
+      if (typeof updateDashboard === 'function') {
+        updateDashboard();
+      }
     }
     console.log('✅ Varelager genindlæst');
   } catch (error) {
@@ -5188,14 +5225,29 @@ async function finishCounting() {
 async function loadOlVand() {
   try {
     console.log('🔄 Henter Øl & Vand produkter...');
+    
+    // KRITISK: Prøv at hente data selv uden token (backend kan være åben)
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+    if (!token) {
+      console.warn('⚠️ Ingen auth token - prøver alligevel at hente Øl & Vand data');
+    }
+    
     // Hent alle produkter og filtrer efter kategori
     const allProducts = await apiCall('/api/wines');
     console.log('📦 Modtaget fra backend:', allProducts ? allProducts.length : 0, 'produkter');
     
     // Filtrer kun Øl & Vand (kategori = 'Øl' eller 'Vand' eller 'Sodavand' eller 'Fadøl' eller 'Flaske- & Dåseøl')
+    // KRITISK: Tjek også vinId prefix (OL- eller WXXXX)
     const olVand = (allProducts || []).filter(p => {
       const kategori = (p.kategori || p.type || '').toLowerCase();
       const navn = (p.navn || '').toLowerCase();
+      const vinId = (p.vinId || '').toLowerCase();
+      
+      // Hvis det starter med "OL-" eller "W" og er et nummer, er det øl & vand
+      if (vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId)) {
+        return true;
+      }
+      
       // Tjek både kategori og navn for at fange alle varianter
       return kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
              kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
@@ -5215,10 +5267,18 @@ async function loadOlVand() {
     // Gem backup
     await saveOlVandBackup(allOlVand);
     
-    // Opdater dashboard og tabel
-    updateDashboardOlVand();
-    populateFiltersOlVand();
-    renderOlVandLager();
+    // KRITISK: Opdater dashboard og tabel MED DET SAMME
+    if (typeof updateDashboardOlVand === 'function') {
+      updateDashboardOlVand();
+      console.log('✅ Dashboard Øl & Vand opdateret');
+    }
+    if (typeof populateFiltersOlVand === 'function') {
+      populateFiltersOlVand();
+    }
+    if (typeof renderOlVandLager === 'function') {
+      renderOlVandLager();
+      console.log('✅ Tabel Øl & Vand opdateret');
+    }
   } catch (error) {
     console.error('❌ Fejl ved indlæsning af Øl & Vand:', error.message);
     if (allOlVand && allOlVand.length > 0) {
@@ -5584,7 +5644,13 @@ async function generateLavStatusRapportOlVand() {
 }
 
   // Øl & Vand funktioner
+  // Eksporter globalt så den kan bruges i doImport
   window.loadOlVand = loadOlVand;
+  if (typeof loadOlVand === 'function') {
+    console.log('✅ loadOlVand eksporteret globalt');
+  } else {
+    console.error('❌ loadOlVand kunne ikke eksporteres!');
+  }
   window.updateDashboardOlVand = updateDashboardOlVand;
   window.showOlVandOversigt = showOlVandOversigt;
   window.renderOlVandLager = renderOlVandLager;
