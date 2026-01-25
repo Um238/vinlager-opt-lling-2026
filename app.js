@@ -1,11 +1,15 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v80
+// VINLAGER OPTÆLLING 2026 - APP.JS v81
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v80 - TYDELIGE FEJLBESKEDER I renderLager() hvis data mangler');
+console.log('Version: v81 - KRITISK FIX: loadWines() kaldes med det samme, allWines initialiseres');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
+
+// KRITISK: Initialiser allWines MED DET SAMME
+let allWines = [];
+console.log('✅ allWines initialiseret som tom array');
 
 // Global state
 let allWines = [];
@@ -157,34 +161,31 @@ document.addEventListener('DOMContentLoaded', () => {
     
     setupNavigation();
     
-    // Vent lidt før vi loader data, så HTML er helt klar
-    setTimeout(() => {
-      console.log('🔍 Tjekker login status...');
-      console.log('  auth objekt:', typeof auth !== 'undefined' ? 'findes' : 'MANGLER');
-      if (typeof auth !== 'undefined' && auth) {
-        console.log('  auth.isLoggedIn():', auth.isLoggedIn ? auth.isLoggedIn() : 'FUNKTION MANGLER');
-        if (auth.isLoggedIn && auth.isLoggedIn()) {
-          console.log('✅ Bruger er logget ind - loader data...');
-          loadWines().then(() => {
-            console.log('✅ loadWines() færdig');
-          }).catch(err => {
-            console.error('❌ Fejl i loadWines():', err);
-          });
-          // Start auto-opdatering
-          if (typeof startAutoUpdate === 'function') {
-            startAutoUpdate();
-          }
-          // Tjek om der er ny rapport fra mobil
-          if (typeof checkForNewReport === 'function') {
-            checkForNewReport();
-          }
-        } else {
-          console.warn('⚠️ Bruger er IKKE logget ind');
-        }
+    // KRITISK: Load data MED DET SAMME hvis logget ind
+    console.log('🔍 Tjekker login status...');
+    if (typeof auth !== 'undefined' && auth && auth.isLoggedIn && auth.isLoggedIn()) {
+      console.log('✅ Bruger er logget ind - loader data NU...');
+      // Load data med det samme
+      if (typeof loadWines === 'function') {
+        loadWines().catch(err => {
+          console.error('❌ KRITISK FEJL i loadWines():', err);
+          alert('FEJL: Kunne ikke hente data. Tjek console (F12)');
+        });
       } else {
-        console.error('❌ auth objekt ikke tilgængelig!');
+        console.error('❌ loadWines funktion mangler!');
+        alert('SYSTEM FEJL: loadWines funktion mangler!');
       }
-    }, 100);
+      // Start auto-opdatering
+      if (typeof startAutoUpdate === 'function') {
+        startAutoUpdate();
+      }
+      // Tjek om der er ny rapport fra mobil
+      if (typeof checkForNewReport === 'function') {
+        checkForNewReport();
+      }
+    } else {
+      console.warn('⚠️ Bruger er IKKE logget ind');
+    }
     
     setupFileInput();
     
