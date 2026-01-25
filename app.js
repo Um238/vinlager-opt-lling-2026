@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v99 - FIX: generateLabels funktionshoved mangler + Syntax fejl');
+console.log('Version: v100 - FIX: Import timeout + retry logik for backend cold start');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2509,11 +2509,59 @@ async function doImport(category = 'vin') {
 
     console.log(`📤 Uploader til ${endpoint} med kategori: ${category}, mode: ${mode}`);
 
-    const response = await fetch(`${getConfig().API_URL}${endpoint}`, {
-      method: 'POST',
-      headers: headers, // IKKE sæt Content-Type - browser sætter det automatisk med boundary for FormData
-      body: formData
-    });
+    // KRITISK: Tilføj timeout og retry logik for backend cold start
+    const timeout = 60000; // 60 sekunder timeout
+    let response;
+    let lastError;
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`🔄 Prøver import igen (forsøg ${attempt + 1}/${maxRetries + 1})...`);
+          // Opdater UI med retry besked
+          const retryContent = document.getElementById(resultsContentId);
+          if (retryContent) {
+            retryContent.innerHTML = `<p>Backend starter op... Prøver igen (${attempt + 1}/${maxRetries + 1})...</p>`;
+          }
+          // Vent lidt før retry (backend cold start kan tage 30-60 sekunder)
+          await new Promise(resolve => setTimeout(resolve, 5000 * attempt)); // 5s, 10s delay
+        }
+        
+        // Opret AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        response = await fetch(`${getConfig().API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: headers, // IKKE sæt Content-Type - browser sætter det automatisk med boundary for FormData
+          body: formData,
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Hvis vi får et svar (selv hvis det er en fejl), er backend oppe
+        break;
+      } catch (error) {
+        lastError = error;
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ Timeout på forsøg ${attempt + 1}`);
+          if (attempt < maxRetries) {
+            continue; // Prøv igen
+          } else {
+            throw new Error('Backend svarer ikke efter flere forsøg. Dette kan skyldes Render.com cold start. Vent 1-2 minutter og prøv igen.');
+          }
+        } else {
+          // Anden fejl - throw med det samme
+          throw error;
+        }
+      }
+    }
+    
+    if (!response) {
+      throw lastError || new Error('Kunne ikke få svar fra backend');
+    }
 
     if (!response.ok) {
       let errorMessage = 'Import fejlede';
@@ -2564,34 +2612,66 @@ async function doImport(category = 'vin') {
     // Reload data - FORCE refresh fra backend
     console.log('🔄 Genindlæser varelager efter import...');
     if (category === 'ol-vand') {
-      // KRITISK: Vent lidt så backend kan gemme data
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // KRITISK: Vent lidt så backend kan gemme data (øg ventetid for cold start)
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // KRITISK: Tjek om loadOlVand er defineret
-      if (typeof loadOlVand === 'function') {
-        console.log('📥 Kalder loadOlVand()...');
-        await loadOlVand();
-        console.log(`✅ loadOlVand() færdig. allOlVand har nu ${allOlVand ? allOlVand.length : 0} produkter`);
-        
-        // KRITISK: Opdater tabel og dashboard MED DET SAMME
-        if (typeof renderOlVandLager === 'function') {
-          console.log('🎨 Renderer Øl & Vand tabel...');
-          renderOlVandLager();
-          console.log('✅ Tabel renderet');
-        } else {
-          console.error('❌ renderOlVandLager er ikke defineret!');
+      // KRITISK: Tjek om loadOlVand er defineret - PRØV MED RETRY
+      let retryCount = 0;
+      const maxRetries = 3;
+      let dataLoaded = false;
+      
+      while (retryCount <= maxRetries && !dataLoaded) {
+        try {
+          if (typeof loadOlVand === 'function') {
+            console.log(`📥 Kalder loadOlVand()... (forsøg ${retryCount + 1}/${maxRetries + 1})`);
+            await loadOlVand();
+            console.log(`✅ loadOlVand() færdig. allOlVand har nu ${allOlVand ? allOlVand.length : 0} produkter`);
+            
+            // Tjek om data faktisk blev hentet
+            if (allOlVand && allOlVand.length > 0) {
+              dataLoaded = true;
+            } else if (retryCount < maxRetries) {
+              console.warn(`⚠️ Ingen data hentet, prøver igen om 2 sekunder...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              retryCount++;
+              continue;
+            }
+            
+            // KRITISK: Opdater tabel og dashboard MED DET SAMME
+            if (typeof renderOlVandLager === 'function') {
+              console.log('🎨 Renderer Øl & Vand tabel...');
+              renderOlVandLager();
+              console.log('✅ Tabel renderet');
+            } else {
+              console.error('❌ renderOlVandLager er ikke defineret!');
+            }
+            
+            if (typeof updateDashboardOlVand === 'function') {
+              updateDashboardOlVand();
+              console.log('✅ Dashboard opdateret');
+            }
+            
+            if (typeof populateFiltersOlVand === 'function') {
+              populateFiltersOlVand();
+              console.log('✅ Filtre opdateret');
+            }
+            
+            if (dataLoaded) break;
+          } else {
+            break; // loadOlVand ikke defineret, prøv fallback
+          }
+        } catch (error) {
+          console.error(`❌ Fejl ved loadOlVand (forsøg ${retryCount + 1}):`, error);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            retryCount++;
+          } else {
+            throw error;
+          }
         }
-        
-        if (typeof updateDashboardOlVand === 'function') {
-          updateDashboardOlVand();
-          console.log('✅ Dashboard opdateret');
-        }
-        
-        if (typeof populateFiltersOlVand === 'function') {
-          populateFiltersOlVand();
-          console.log('✅ Filtre opdateret');
-        }
-      } else {
+      }
+      
+      if (!dataLoaded && typeof loadOlVand !== 'function') {
         console.error('❌ loadOlVand er ikke defineret!');
         // Prøv at hente data direkte
         try {
@@ -2628,12 +2708,43 @@ async function doImport(category = 'vin') {
         }
       }
     } else {
-      await loadWines();
-      if (typeof renderLager === 'function') {
-        renderLager();
-      }
-      if (typeof updateDashboard === 'function') {
-        updateDashboard();
+      // KRITISK: Prøv at hente Vin data med retry
+      let retryCount = 0;
+      const maxRetries = 3;
+      let dataLoaded = false;
+      
+      while (retryCount <= maxRetries && !dataLoaded) {
+        try {
+          console.log(`📥 Kalder loadWines()... (forsøg ${retryCount + 1}/${maxRetries + 1})`);
+          await loadWines();
+          
+          // Tjek om data faktisk blev hentet
+          if (allWines && allWines.length > 0) {
+            dataLoaded = true;
+          } else if (retryCount < maxRetries) {
+            console.warn(`⚠️ Ingen data hentet, prøver igen om 2 sekunder...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            retryCount++;
+            continue;
+          }
+          
+          if (typeof renderLager === 'function') {
+            renderLager();
+          }
+          if (typeof updateDashboard === 'function') {
+            updateDashboard();
+          }
+          
+          if (dataLoaded) break;
+        } catch (error) {
+          console.error(`❌ Fejl ved loadWines (forsøg ${retryCount + 1}):`, error);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            retryCount++;
+          } else {
+            console.error('❌ Kunne ikke hente data efter import efter flere forsøg');
+          }
+        }
       }
     }
     console.log('✅ Varelager genindlæst');
