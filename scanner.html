@@ -149,6 +149,9 @@
     let scanAnimationFrame = null;
     let locations = [];
     let selectedLocationId = null;
+    let locationsLoaded = false; // Track om lokationer er hentet
+    let lastScannedCode = null; // Debounce: sidste scannede kode
+    let lastScanTime = 0; // Debounce: tidspunkt for sidste scan
 
     // LUK SCANNER - ALTID VIRKER
     window.closeScanner = function() {
@@ -259,20 +262,43 @@
       }, 1000);
     }
 
+    // START SCANNER - VENT PÅ LOKATIONER
+    function startQRScannerWhenReady() {
+      // Vent på at lokationer er hentet
+      if (!locationsLoaded) {
+        console.log('⏳ Venter på at lokationer er hentet...');
+        setTimeout(() => startQRScannerWhenReady(), 500);
+        return;
+      }
+      
+      // Vent også på at jsQR biblioteket er indlæst
+      if (typeof jsQR === 'undefined') {
+        console.log('⏳ Venter på jsQR bibliotek...');
+        setTimeout(() => startQRScannerWhenReady(), 500);
+        return;
+      }
+      
+      // Nu kan vi starte scanneren
+      console.log('✅ Starter scanner - lokationer og bibliotek er klar');
+      startQRScanner();
+    }
+    
     // START SCANNER
     async function startQRScanner() {
-      if (qrScanning) return;
+      if (qrScanning) {
+        console.log('⚠️ Scanner kører allerede');
+        return;
+      }
       
       const video = document.getElementById('qr-video');
       const canvas = document.getElementById('qr-canvas');
-      if (!video || !canvas) return;
-      
-      if (typeof jsQR === 'undefined') {
-        setTimeout(() => startQRScanner(), 500);
+      if (!video || !canvas) {
+        console.error('❌ Video eller canvas element ikke fundet');
         return;
       }
       
       try {
+        console.log('📹 Anmoder om kamera adgang...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' }
         });
@@ -281,51 +307,93 @@
         video.srcObject = stream;
         qrScanning = true;
         
-        video.onloadedmetadata = () => video.play();
+        video.onloadedmetadata = () => {
+          video.play();
+          console.log('✅ Kamera startet');
+        };
         video.play();
         
-        function scanFrame() {
-          if (!qrScanning || !video) return;
-          
-          if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-            scanAnimationFrame = requestAnimationFrame(scanFrame);
-            return;
-          }
-          
-          try {
-            const width = video.videoWidth;
-            const height = video.videoHeight;
-            if (!width || !height) {
+        // Vent lidt før vi starter scanning (undgå falske QR-koder fra støj)
+        setTimeout(() => {
+          scanFrame();
+        }, 1000); // Vent 1 sekund efter kamera starter
+        
+      } catch (error) {
+        qrScanning = false;
+        console.error('❌ Kamera fejl:', error.message);
+        alert('Kunne ikke få adgang til kamera. Tjek om kameraet er aktiveret.');
+      }
+    }
+    
+    // SCAN FRAME - MED DEBOUNCE OG VALIDERING
+    function scanFrame() {
+      if (!qrScanning || !video) return;
+      
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        scanAnimationFrame = requestAnimationFrame(scanFrame);
+        return;
+      }
+      
+      try {
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        if (!width || !height) {
+          scanAnimationFrame = requestAnimationFrame(scanFrame);
+          return;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        
+        if (typeof jsQR !== 'undefined') {
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data && code.data.trim()) {
+            const codeData = code.data.trim();
+            
+            // VALIDERING: Tjek om QR-koden ser gyldig ud
+            // Accepter både VIN-XXXX format og WXXX format (varenummer)
+            const isValidFormat = /^(VIN-|W\d+|vin-|w\d+)/i.test(codeData);
+            
+            if (!isValidFormat) {
+              // Ignorer falske QR-koder fra støj
               scanAnimationFrame = requestAnimationFrame(scanFrame);
               return;
             }
             
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, width, height);
-            const imageData = ctx.getImageData(0, 0, width, height);
-            
-            if (typeof jsQR !== 'undefined') {
-              const code = jsQR(imageData.data, imageData.width, imageData.height);
-              if (code && code.data && code.data.trim()) {
-                handleScan(code.data.trim());
-              }
+            // DEBOUNCE: Ignorer samme kode hvis den scannes for hurtigt (inden for 2 sekunder)
+            const now = Date.now();
+            if (codeData === lastScannedCode && (now - lastScanTime) < 2000) {
+              // Samme kode scannet for hurtigt - ignorer
+              scanAnimationFrame = requestAnimationFrame(scanFrame);
+              return;
             }
-          } catch (err) {
-            console.error('Scan fejl:', err);
-          }
-          
-          if (qrScanning) {
-            scanAnimationFrame = requestAnimationFrame(scanFrame);
+            
+            // Ny kode eller nok tid er gået - behandle scan
+            lastScannedCode = codeData;
+            lastScanTime = now;
+            console.log('📷 QR-kode scannet:', codeData);
+            handleScan(codeData);
+            
+            // Stop scanning kortvarigt for at undgå gentagne scans
+            qrScanning = false;
+            setTimeout(() => {
+              if (video && video.srcObject) {
+                qrScanning = true;
+                scanFrame();
+              }
+            }, 2000); // Vent 2 sekunder før vi scanner igen
+            return;
           }
         }
-        
-          scanFrame();
-          // Scanner starter automatisk - ingen status-besked nødvendig
-      } catch (error) {
-        qrScanning = false;
-        console.error('Kamera fejl:', error.message);
+      } catch (err) {
+        console.error('❌ Scan fejl:', err);
+      }
+      
+      if (qrScanning) {
+        scanAnimationFrame = requestAnimationFrame(scanFrame);
       }
     }
 
@@ -566,24 +634,9 @@
 
     // START ALT
     function start() {
+      console.log('🚀 Starter scanner applikation...');
+      // Hent lokationer først - scanneren starter automatisk når de er klar
       loadLocations();
-      setTimeout(() => {
-        if (typeof jsQR !== 'undefined') {
-          startQRScanner();
-        } else {
-          let tries = 0;
-          const check = setInterval(() => {
-            tries++;
-            if (typeof jsQR !== 'undefined') {
-              clearInterval(check);
-              startQRScanner();
-            } else if (tries > 30) {
-              clearInterval(check);
-              console.error('Scanner bibliotek ikke indlæst');
-            }
-          }, 200);
-        }
-      }, 1000);
       
       const input = document.getElementById('quantity-input');
       if (input) {
