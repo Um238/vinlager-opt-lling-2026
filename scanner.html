@@ -155,6 +155,7 @@
     let qrStream = null;
     let qrScanning = false;
     let currentWine = null;
+    let scanAnimationFrame = null;
     let scannedWines = new Map();
     let scanAnimationFrame = null;
     let locations = [];
@@ -456,14 +457,7 @@
         video.srcObject = stream;
         qrScanning = true;
         
-        video.onloadedmetadata = () => {
-          showStatus('Kamera klar - starter scanning...', 'success', 2000);
-          video.play().then(() => {
-            hideStatus();
-          }).catch(err => {
-            showStatus(`FEJL ved afspilning: ${err.message}`, 'error', 5000);
-          });
-        };
+        // onloadedmetadata håndteres i startScanning funktionen
         
         // Prøv at afspille med det samme
         video.play().then(() => {
@@ -499,9 +493,25 @@
     
     // SCAN FRAME - MED DEBOUNCE OG VALIDERING
     function scanFrame() {
-      if (!qrScanning || !video) return;
+      if (!qrScanning) {
+        console.log('⚠️ qrScanning er false - stopper scanning');
+        return;
+      }
       
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      if (!video) {
+        console.error('❌ video element ikke fundet');
+        return;
+      }
+      
+      // Tjek om video er klar
+      if (video.readyState < video.HAVE_METADATA) {
+        // Video ikke klar endnu - prøv igen snart
+        scanAnimationFrame = requestAnimationFrame(scanFrame);
+        return;
+      }
+      
+      if (video.readyState < video.HAVE_ENOUGH_DATA) {
+        // Video har ikke nok data endnu
         scanAnimationFrame = requestAnimationFrame(scanFrame);
         return;
       }
@@ -509,7 +519,8 @@
       try {
         const width = video.videoWidth;
         const height = video.videoHeight;
-        if (!width || !height) {
+        if (!width || !height || width === 0 || height === 0) {
+          // Video dimensioner ikke klar endnu
           scanAnimationFrame = requestAnimationFrame(scanFrame);
           return;
         }
@@ -520,46 +531,52 @@
         ctx.drawImage(video, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
         
-        if (typeof jsQR !== 'undefined') {
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-          if (code && code.data && code.data.trim()) {
-            const codeData = code.data.trim();
-            
-            // VALIDERING: Tjek om QR-koden ser gyldig ud
-            // Accepter både VIN-XXXX format og WXXX format (varenummer)
-            const isValidFormat = /^(VIN-|W\d+|vin-|w\d+)/i.test(codeData);
-            
-            if (!isValidFormat) {
-              // Ignorer falske QR-koder fra støj
-              scanAnimationFrame = requestAnimationFrame(scanFrame);
-              return;
-            }
-            
-            // DEBOUNCE: Ignorer samme kode hvis den scannes for hurtigt (inden for 2 sekunder)
-            const now = Date.now();
-            if (codeData === lastScannedCode && (now - lastScanTime) < 2000) {
-              // Samme kode scannet for hurtigt - ignorer
-              scanAnimationFrame = requestAnimationFrame(scanFrame);
-              return;
-            }
-            
-            // Ny kode eller nok tid er gået - behandle scan
-            lastScannedCode = codeData;
-            lastScanTime = now;
-            console.log('📷 QR-kode scannet:', codeData);
-            
-            // Behandle scan, men fortsæt scanning
-            handleScan(codeData);
-            
-            // Fortsæt scanning - ikke stop
+        if (typeof jsQR === 'undefined') {
+          console.warn('⚠️ jsQR ikke defineret - venter...');
+          scanAnimationFrame = requestAnimationFrame(scanFrame);
+          return;
+        }
+        
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data && code.data.trim()) {
+          const codeData = code.data.trim();
+          
+          // VALIDERING: Tjek om QR-koden ser gyldig ud
+          // Accepter både VIN-XXXX format og WXXX format (varenummer)
+          const isValidFormat = /^(VIN-|W\d+|vin-|w\d+)/i.test(codeData);
+          
+          if (!isValidFormat) {
+            // Ignorer falske QR-koder fra støj
             scanAnimationFrame = requestAnimationFrame(scanFrame);
             return;
           }
+          
+          // DEBOUNCE: Ignorer samme kode hvis den scannes for hurtigt (inden for 2 sekunder)
+          const now = Date.now();
+          if (codeData === lastScannedCode && (now - lastScanTime) < 2000) {
+            // Samme kode scannet for hurtigt - ignorer
+            scanAnimationFrame = requestAnimationFrame(scanFrame);
+            return;
+          }
+          
+          // Ny kode eller nok tid er gået - behandle scan
+          lastScannedCode = codeData;
+          lastScanTime = now;
+          console.log('📷 QR-kode scannet:', codeData);
+          
+          // Behandle scan, men fortsæt scanning
+          handleScan(codeData);
+          
+          // Fortsæt scanning - ikke stop
+          scanAnimationFrame = requestAnimationFrame(scanFrame);
+          return;
         }
       } catch (err) {
         console.error('❌ Scan fejl:', err);
+        // Fortsæt scanning selv ved fejl
       }
       
+      // Fortsæt scanning
       if (qrScanning) {
         scanAnimationFrame = requestAnimationFrame(scanFrame);
       }
@@ -567,14 +584,62 @@
 
     // HÅNDTER SCAN
     async function handleScan(codeData) {
-      if (!codeData || !codeData.trim()) return;
+      if (!codeData || !codeData.trim()) {
+        console.warn('⚠️ Tom eller ugyldig QR-kode');
+        return;
+      }
+      
       const modal = document.getElementById('quantity-modal');
-      if (modal && modal.classList.contains('show')) return;
+      if (modal && modal.classList.contains('show')) {
+        console.log('⚠️ Modal allerede åben - ignorerer scan');
+        return;
+      }
+      
+      console.log(`🔍 Søger efter vin med kode: ${codeData.trim()}`);
       
       try {
-        currentWine = await apiCall(`/api/wines/${encodeURIComponent(codeData.trim())}`);
-        showQuantityModal(currentWine, false);
+        // Prøv først med VIN-ID direkte
+        let wine = null;
+        try {
+          wine = await apiCall(`/api/wines/${encodeURIComponent(codeData.trim())}`);
+          console.log('✅ Vin fundet via /api/wines/:id:', wine);
+        } catch (e1) {
+          console.warn('⚠️ Fejl ved /api/wines/:id, prøver /api/wines/barcode/:barcode');
+          // Fallback: Prøv med barcode endpoint
+          try {
+            wine = await apiCall(`/api/wines/barcode/${encodeURIComponent(codeData.trim())}`);
+            console.log('✅ Vin fundet via /api/wines/barcode/:barcode:', wine);
+          } catch (e2) {
+            console.warn('⚠️ Fejl ved /api/wines/barcode/:barcode, prøver at søge i alle wines');
+            // Sidste fallback: Hent alle wines og søg manuelt
+            try {
+              const allWines = await apiCall('/api/wines');
+              if (Array.isArray(allWines)) {
+                wine = allWines.find(w => 
+                  w.vinId === codeData.trim() || 
+                  w.varenummer === codeData.trim() ||
+                  w.barcode === codeData.trim()
+                );
+                if (wine) {
+                  console.log('✅ Vin fundet i alle wines:', wine);
+                } else {
+                  console.warn('⚠️ Vin ikke fundet i alle wines');
+                }
+              }
+            } catch (e3) {
+              console.error('❌ Alle metoder fejlede:', e3);
+            }
+          }
+        }
+        
+        if (wine && wine.vinId) {
+          showQuantityModal(wine, false);
+        } else {
+          console.warn('⚠️ Vin ikke fundet - viser "Ukendt vare" modal');
+          showQuantityModal({ vinId: codeData.trim(), navn: 'Ukendt vare' }, true);
+        }
       } catch (error) {
+        console.error('❌ KRITISK FEJL i handleScan:', error);
         showQuantityModal({ vinId: codeData.trim(), navn: 'Ukendt vare' }, true);
       }
     }
