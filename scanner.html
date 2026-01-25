@@ -397,16 +397,20 @@
 
     // START SCANNER - VENT PÅ LOKATIONER
     function startQRScannerWhenReady() {
-      // Vent maksimalt 5 sekunder på lokationer
+      console.log('🔍 startQRScannerWhenReady() kaldt');
+      console.log('  locationsLoaded:', locationsLoaded);
+      console.log('  jsQR defineret:', typeof jsQR !== 'undefined');
+      
+      // Vent maksimalt 10 sekunder på lokationer
       let waitCount = 0;
-      const maxWait = 10; // 10 * 500ms = 5 sekunder
+      const maxWait = 20; // 20 * 500ms = 10 sekunder
       
       function checkAndStart() {
         waitCount++;
+        console.log(`⏳ Tjek ${waitCount}/${maxWait}: locationsLoaded=${locationsLoaded}, jsQR=${typeof jsQR !== 'undefined'}`);
         
-        // Hvis lokationer ikke er hentet efter 5 sekunder, fortsæt alligevel
+        // Hvis lokationer ikke er hentet, vent lidt mere
         if (!locationsLoaded && waitCount < maxWait) {
-          console.log(`⏳ Venter på lokationer... (${waitCount}/${maxWait})`);
           setTimeout(checkAndStart, 500);
           return;
         }
@@ -419,7 +423,7 @@
             return;
           } else {
             console.error('❌ jsQR bibliotek ikke indlæst efter lang ventetid');
-            alert('Scanner bibliotek ikke indlæst. Genindlæs siden.');
+            showStatus('FEJL: Scanner bibliotek ikke indlæst. Genindlæs siden.', 'error', 0);
             return;
           }
         }
@@ -883,17 +887,56 @@
           archived: false
         };
         
+        // KRITISK: Gem i localStorage FØRST (sikker backup)
+        try {
+          const saved = localStorage.getItem('reportsHistory');
+          let existingReports = [];
+          if (saved) {
+            try {
+              existingReports = JSON.parse(saved);
+              if (!Array.isArray(existingReports)) {
+                existingReports = [];
+              }
+            } catch (e) {
+              existingReports = [];
+            }
+          }
+          
+          const reportForStorage = {
+            id: reportData.reportId,
+            date: reportData.date,
+            name: reportData.name,
+            type: reportData.type,
+            wineCount: reportData.wineCount,
+            totalValue: reportData.totalValue,
+            location: reportData.location,
+            archived: reportData.archived
+          };
+          
+          existingReports.unshift(reportForStorage);
+          if (existingReports.length > 200) {
+            existingReports = existingReports.slice(0, 200);
+          }
+          
+          localStorage.setItem('reportsHistory', JSON.stringify(existingReports));
+          console.log('✅ Rapport gemt i localStorage backup');
+        } catch (storageError) {
+          console.error('❌ Fejl ved gemning i localStorage:', storageError);
+        }
+        
+        // Prøv at gemme i backend (men fortsæt selv hvis det fejler)
         try {
           await apiCall('/api/reports/save', {
             method: 'POST',
             body: JSON.stringify(reportData)
           });
+          console.log('✅ Rapport gemt i backend');
         } catch (e) {
-          alert('Rapport kunne ikke gemmes i backend.');
+          console.warn('⚠️ Kunne ikke gemme i backend (fortsætter alligevel):', e);
+          // Fortsæt alligevel - vi har gemt i localStorage
         }
         
         doc.save('lagerrapport_optælling.pdf');
-          // Rapport genereret - vises i alert
         
         setTimeout(() => {
           alert(`Optælling afsluttet! ${grandCount} vine, ${grandTotal.toFixed(2)} kr.`);
