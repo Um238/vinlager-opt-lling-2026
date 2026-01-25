@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v79
+// VINLAGER OPTÆLLING 2026 - APP.JS v80
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v79 - OMFATTENDE LOGGING I loadWines() og checkLoginStatus()');
+console.log('Version: v80 - TYDELIGE FEJLBESKEDER I renderLager() hvis data mangler');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -1076,22 +1076,56 @@ function clearFilter() {
 }
 
 function renderLager() {
+  console.log('=== RENDERLAGER START ===');
+  console.log('allWines:', allWines);
+  console.log('allWines type:', typeof allWines);
+  console.log('allWines er array:', Array.isArray(allWines));
+  console.log('allWines.length:', allWines ? allWines.length : 'allWines er undefined');
+  
   // Tjek om allWines er tom eller undefined
-  if (!allWines || allWines.length === 0) {
+  if (!allWines || !Array.isArray(allWines) || allWines.length === 0) {
     console.warn('⚠️ allWines er tom - prøver at hente data eller gendanne fra backup...');
     const tbody = document.getElementById('lager-tbody');
+    if (!tbody) {
+      console.error('❌ lager-tbody element ikke fundet!');
+      return;
+    }
+    
     let hint = '';
     try {
-      if (localStorage.getItem(WINES_BACKUP_KEY)) hint = ' Gå til Rapporter og klik "Gendan lager fra backup" hvis du har backup.';
-    } catch (e) {}
-    if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #666;">Ingen vine fundet. Prøver at hente data...' + hint + '</td></tr>';
+      if (localStorage.getItem(WINES_BACKUP_KEY)) {
+        hint = ' Gå til Rapporter og klik "Gendan lager fra backup" hvis du har backup.';
+      }
+    } catch (e) {
+      console.error('Fejl ved tjek af backup:', e);
     }
-    loadWines().then(() => {
-      setTimeout(() => renderLager(), 500);
-    });
+    
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #c00; background: #fee; font-weight: bold;">⚠️ INGEN DATA FUNDET!<br><br>1. Tjek om du er logget ind<br>2. Prøv at klikke på "Opdater" knappen<br>3. Eller gå til Import og importer data' + hint + '</td></tr>';
+    
+    // Prøv at hente data én gang
+    if (typeof loadWines === 'function') {
+      console.log('🔄 Kalder loadWines()...');
+      loadWines().then(() => {
+        console.log('✅ loadWines() færdig, kalder renderLager() igen...');
+        setTimeout(() => {
+          if (allWines && allWines.length > 0) {
+            renderLager();
+          } else {
+            console.error('❌ allWines stadig tom efter loadWines()');
+          }
+        }, 500);
+      }).catch(err => {
+        console.error('❌ Fejl i loadWines():', err);
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #c00; background: #fee; font-weight: bold;">❌ FEJL VED HENTNING AF DATA!<br><br>Fejl: ' + (err.message || 'Ukendt fejl') + '<br><br>Tjek browser console for detaljer.</td></tr>';
+      });
+    } else {
+      console.error('❌ loadWines funktion ikke fundet!');
+      tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 20px; color: #c00; background: #fee; font-weight: bold;">❌ SYSTEM FEJL: loadWines funktion mangler!<br><br>Genindlæs siden (Ctrl+Shift+R)</td></tr>';
+    }
     return;
   }
+  
+  console.log(`✅ Rendering ${allWines.length} vine...`);
   
   const lokationFilter = document.getElementById('filter-lokation').value;
   const reolFilter = document.getElementById('filter-reol').value;
@@ -1110,7 +1144,12 @@ function renderLager() {
   }
 
   const tbody = document.getElementById('lager-tbody');
+  if (!tbody) {
+    console.error('❌ lager-tbody element ikke fundet i renderLager()!');
+    return;
+  }
   tbody.innerHTML = '';
+  console.log('✅ Tabel tømt, starter rendering...');
 
   filtered.forEach(wine => {
     const row = document.createElement('tr');
@@ -1238,12 +1277,18 @@ function renderLager() {
     }
   });
   
+  console.log(`✅ ${filtered.length} rækker renderet i tabellen`);
+  
   // KRITISK FIX: Opdater dashboard EFTER tabel er renderet
   // Dette sikrer at dashboard altid viser korrekt antal i lavt lager
   if (typeof updateDashboard === 'function') {
     updateDashboard();
     console.log('✅ Dashboard opdateret i renderLager()');
+  } else {
+    console.warn('⚠️ updateDashboard funktion mangler');
   }
+  
+  console.log('=== RENDERLAGER SLUT ===');
 }
 
 // Opdater pris
