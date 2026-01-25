@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v96
+// VINLAGER OPTÆLLING 2026 - APP.JS v97
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v96 - FIX: Import sektion mangler + uploadOlVandImage undefined + Tabel visning');
+console.log('Version: v97 - FIX: Labels/QR koder for Øl & Vand + Status rapport knap i rapporter sektion');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -258,6 +258,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     setupFileInput();
+    
+    // Populér label filtre for både Vin og Øl & Vand
+    populateLabelFilters();
+    populateLabelFiltersOlVand();
     
     // setupScanInput kun hvis funktionen findes
     if (typeof setupScanInput === 'function') {
@@ -2726,6 +2730,9 @@ async function generateLabels() {
       }
     }, index * 50); // Lidt delay for hver label
   });
+  
+  console.log(`✅ ${filtered.length} labels genereret for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'}`);
+  showSuccess(`${filtered.length} labels genereret for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'}!`);
 }
 
 // Opdater minimum antal (for bagudkompatibilitet)
@@ -2873,6 +2880,22 @@ function showImageModal(imageUrl) {
 
 // Print kun labels
 function printLabels(category = 'vin') {
+  console.log(`🖨️ Printer labels for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'}...`);
+  
+  // KRITISK: Brug korrekt container baseret på kategori
+  const containerId = category === 'ol-vand' ? 'labels-container-ol-vand' : 'labels-container';
+  const container = document.getElementById(containerId);
+  
+  if (!container) {
+    console.error(`❌ Container ${containerId} ikke fundet!`);
+    alert(`Fejl: Container for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'} labels ikke fundet.`);
+    return;
+  }
+  
+  if (container.children.length === 0) {
+    alert(`Ingen labels genereret endnu. Klik på "Generer labels" først.`);
+    return;
+  }
   const containerId = category === 'ol-vand' ? 'labels-container-ol-vand' : 'labels-container';
   const container = document.getElementById(containerId);
   if (!container || container.children.length === 0) {
@@ -5367,6 +5390,9 @@ async function loadOlVand() {
     if (typeof populateFiltersOlVand === 'function') {
       populateFiltersOlVand();
     }
+    if (typeof populateLabelFiltersOlVand === 'function') {
+      populateLabelFiltersOlVand();
+    }
     if (typeof renderOlVandLager === 'function') {
       renderOlVandLager();
       console.log('✅ Tabel Øl & Vand opdateret');
@@ -5768,6 +5794,8 @@ async function generateLavStatusRapportOlVand() {
   window.showOlVandOversigt = showOlVandOversigt;
   window.renderOlVandLager = renderOlVandLager;
   window.populateFiltersOlVand = populateFiltersOlVand;
+  window.populateLabelFilters = populateLabelFilters;
+  window.populateLabelFiltersOlVand = populateLabelFiltersOlVand;
   window.applyFilterOlVand = applyFilterOlVand;
   window.clearFilterOlVand = clearFilterOlVand;
   
