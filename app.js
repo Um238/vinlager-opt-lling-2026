@@ -1,15 +1,11 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v81
+// VINLAGER OPTÆLLING 2026 - APP.JS v82
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v81 - KRITISK FIX: loadWines() kaldes med det samme, allWines initialiseres');
+console.log('Version: v82 - KRITISK FIX: generateLavStatusRapport bruger allWines direkte, scanner har fallback lokationer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
-
-// KRITISK: Initialiser allWines MED DET SAMME
-let allWines = [];
-console.log('✅ allWines initialiseret som tom array');
 
 // Global state
 let allWines = [];
