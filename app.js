@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v95
+// VINLAGER OPTÆLLING 2026 - APP.JS v96
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v95 - FIX: Øl & Vand tabel tom efter import + Status rapport + Bedre logging');
+console.log('Version: v96 - FIX: Import sektion mangler + uploadOlVandImage undefined + Tabel visning');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2786,6 +2786,56 @@ async function uploadWineImage(input, vinId) {
   }
 }
 
+// Upload billede for Øl & Vand
+async function uploadOlVandImage(input, vinId) {
+  if (!input || !input.files || !input.files[0]) {
+    console.error('Ingen fil valgt');
+    return;
+  }
+  
+  const file = input.files[0];
+  console.log('Uploader billede:', file.name, 'til Øl & Vand:', vinId);
+  
+  const formData = new FormData();
+  formData.append('billede', file);
+  
+  try {
+    const url = `${getConfig().API_URL}/api/wines/${vinId}/image`;
+    console.log('Upload URL:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+      throw new Error(errorData.error || `Upload fejlede: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Upload resultat:', result);
+    
+    // Opdater visningen
+    await loadOlVand(); // Genhent alle Øl & Vand produkter
+    renderOlVandLager();
+    showSuccess('Billede uploadet!');
+    
+    // Reset file input så man kan uploade samme fil igen
+    if (input) input.value = '';
+  } catch (error) {
+    console.error('Fejl ved upload:', error);
+    alert('Fejl ved upload af billede: ' + error.message);
+    showError('Kunne ikke uploade billede: ' + error.message);
+  }
+}
+
 // Slet billede
 async function deleteWineImage(vinId) {
   if (!confirm('Er du sikker på, at du vil slette billedet?')) return;
@@ -5465,8 +5515,13 @@ function renderOlVandLager() {
   tbody.innerHTML = '';
   
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 20px; color: #999;">Ingen Øl & Vand produkter fundet. Importer data først.</td></tr>';
-    console.log('⚠️ Ingen produkter at vise');
+    if (allOlVand.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 20px; color: #999;">Ingen Øl & Vand produkter fundet. Importer data først.</td></tr>';
+      console.log('⚠️ Ingen produkter at vise (tom array)');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 20px; color: #999;">Ingen produkter matcher de valgte filtre. Prøv at rydde filtrene.</td></tr>';
+      console.log(`⚠️ ${allOlVand.length} produkter i array, men ingen matcher filtrene`);
+    }
     return;
   }
   
