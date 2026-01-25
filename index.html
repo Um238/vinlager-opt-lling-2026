@@ -91,7 +91,8 @@
     <h1>🍷 CellarCount 2026</h1>
     <nav>
       <button class="nav-btn active" data-page="dashboard">Dashboard</button>
-      <button class="nav-btn" data-page="lager">Lager</button>
+      <button class="nav-btn" data-page="lager">Vinlager</button>
+      <button class="nav-btn" data-page="ol-vand-lager">Lager ØL & vand</button>
       <button class="nav-btn" data-page="optælling">Optælling</button>
       <button class="nav-btn" data-page="import">Import</button>
       <button class="nav-btn" data-page="labels">Labels</button>
@@ -108,6 +109,7 @@
       <div class="card">
         <h2>Dashboard</h2>
         
+        <h3 style="margin-top: 20px; margin-bottom: 15px; color: #333;">🍷 Vinlager</h3>
         <div class="stats-grid">
           <div class="stat-card clickable" onclick="showVineOversigt('alle')">
             <div class="stat-label">Antal vine</div>
@@ -122,13 +124,29 @@
             <div class="stat-value warning" id="stat-lavt">0</div>
           </div>
         </div>
+        
+        <h3 style="margin-top: 30px; margin-bottom: 15px; color: #333;">🍺 Øl & Vand</h3>
+        <div class="stats-grid">
+          <div class="stat-card clickable" onclick="showOlVandOversigt('alle')">
+            <div class="stat-label">Antal Øl & vand</div>
+            <div class="stat-value" id="stat-ant-ol-vand">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Samlet lagerværdi</div>
+            <div class="stat-value" id="stat-værdi-ol-vand">0 kr.</div>
+          </div>
+          <div class="stat-card clickable" onclick="showOlVandOversigt('lavt')">
+            <div class="stat-label">Lavt lager</div>
+            <div class="stat-value warning" id="stat-lavt-ol-vand">0</div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- Lager -->
+    <!-- Vinlager -->
     <section id="lager" class="page">
       <div class="card">
-        <h2>Lageroversigt</h2>
+        <h2>Vinlageroversigt</h2>
         <div class="filter-bar">
           <select id="filter-lokation">
             <option value="">Alle lokationer</option>
@@ -164,6 +182,49 @@
               </tr>
             </thead>
             <tbody id="lager-tbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lager ØL & vand -->
+    <section id="ol-vand-lager" class="page">
+      <div class="card">
+        <h2>Lageroversigt Øl & Vand</h2>
+        <div class="filter-bar">
+          <select id="filter-lokation-ol-vand">
+            <option value="">Alle lokationer</option>
+          </select>
+          <select id="filter-reol-ol-vand">
+            <option value="">Alle reoler</option>
+          </select>
+          <select id="filter-hylde-ol-vand">
+            <option value="">Alle hylder</option>
+          </select>
+          <button class="btn-secondary" onclick="applyFilterOlVand()">Filtrer</button>
+          <button class="btn-secondary" onclick="clearFilterOlVand()">Ryd</button>
+          <button class="btn-primary" onclick="if(typeof loadOlVand === 'function'){loadOlVand().then(()=>{updateDashboardOlVand();renderOlVandLager();showSuccess('Lager opdateret');});}" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 10px;">🔄 Opdater</button>
+        </div>
+        <div class="table-container">
+          <table id="ol-vand-lager-table">
+            <thead>
+              <tr>
+                <th>VIN-ID</th>
+                <th>Varenummer</th>
+                <th>Navn</th>
+                <th>Type</th>
+                <th>Kategori</th>
+                <th>Lokation</th>
+                <th>Reol</th>
+                <th>Hylde</th>
+                <th class="text-right">Antal</th>
+                <th class="text-right">Min. Antal</th>
+                <th class="text-right">Indkøbspris</th>
+                <th>Billede</th>
+              </tr>
+            </thead>
+            <tbody id="ol-vand-lager-tbody">
             </tbody>
           </table>
         </div>
@@ -224,34 +285,70 @@
     <section id="import" class="page">
       <div class="card">
         <h2>Import CSV/Excel</h2>
-        <div class="import-section">
+        
+        <!-- Import Vin -->
+        <div class="import-section" style="margin-bottom: 40px; padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #2d5016;">🍷 Import Vin</h3>
           <div style="margin-bottom: 20px; padding: 15px; background: #e6f7e6; border-radius: 8px; border: 2px solid #4CAF50;">
-            <h3 style="margin-top: 0; color: #2d5016;">📥 Download Excel Skabelon</h3>
+            <h4 style="margin-top: 0; color: #2d5016;">📥 Download Excel Skabelon</h4>
             <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
-            <button class="btn-primary" onclick="downloadTemplate()" style="background: #4CAF50;">
+            <button class="btn-primary" onclick="downloadTemplate('vin')" style="background: #4CAF50;">
               📥 Download vinlager_skabelon.xlsx
             </button>
           </div>
           <p>Vælg import-mode:</p>
           <div class="radio-group">
-            <label><input type="radio" name="import-mode" value="opdater" checked> Opdatér eksisterende vine (anbefalet)</label>
-            <label><input type="radio" name="import-mode" value="tilføj"> Tilføj nye vine (spring eksisterende over)</label>
-            <label><input type="radio" name="import-mode" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
+            <label><input type="radio" name="import-mode-vin" value="opdater" checked> Opdatér eksisterende vine (anbefalet)</label>
+            <label><input type="radio" name="import-mode-vin" value="tilføj"> Tilføj nye vine (spring eksisterende over)</label>
+            <label><input type="radio" name="import-mode-vin" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
           </div>
 
           <div class="file-upload">
-            <label for="file-input" class="file-label">
+            <label for="file-input-vin" class="file-label">
               <span>Vælg CSV eller Excel fil</span>
-              <input type="file" id="file-input" accept=".csv,.xlsx,.xls" style="display: none;">
+              <input type="file" id="file-input-vin" accept=".csv,.xlsx,.xls" style="display: none;" data-category="vin">
             </label>
-            <span id="file-name"></span>
+            <span id="file-name-vin"></span>
           </div>
 
-          <button class="btn-primary" onclick="doImport()">Start import</button>
+          <button class="btn-primary" onclick="doImport('vin')">Start import vin</button>
 
-          <div id="import-results" style="display: none;">
-            <h3>Import resultat:</h3>
-            <div id="import-results-content"></div>
+          <div id="import-results-vin" style="display: none;">
+            <h4>Import resultat:</h4>
+            <div id="import-results-content-vin"></div>
+          </div>
+        </div>
+
+        <!-- Import Øl & Vand -->
+        <div class="import-section" style="padding: 20px; border: 2px solid #2196F3; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #1565C0;">🍺 Import Øl & Vand</h3>
+          <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
+            <h4 style="margin-top: 0; color: #1565C0;">📥 Download Excel Skabelon</h4>
+            <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
+            <button class="btn-primary" onclick="downloadTemplate('ol-vand')" style="background: #2196F3;">
+              📥 Download ol_vand_skabelon.xlsx
+            </button>
+          </div>
+          <p>Vælg import-mode:</p>
+          <div class="radio-group">
+            <label><input type="radio" name="import-mode-ol-vand" value="opdater" checked> Opdatér eksisterende Øl & Vand (anbefalet)</label>
+            <label><input type="radio" name="import-mode-ol-vand" value="tilføj"> Tilføj nye Øl & Vand (spring eksisterende over)</label>
+            <label><input type="radio" name="import-mode-ol-vand" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
+          </div>
+
+          <div class="file-upload">
+            <label for="file-input-ol-vand" class="file-label">
+              <span>Vælg CSV eller Excel fil</span>
+              <input type="file" id="file-input-ol-vand" accept=".csv,.xlsx,.xls" style="display: none;" data-category="ol-vand">
+            </label>
+            <span id="file-name-ol-vand"></span>
+          </div>
+
+          <button class="btn-primary" onclick="doImport('ol-vand')" style="background: #2196F3;">Start import Øl & Vand</button>
+
+          <div id="import-results-ol-vand" style="display: none;">
+            <h4>Import resultat:</h4>
+            <div id="import-results-content-ol-vand"></div>
           </div>
         </div>
       </div>
@@ -261,20 +358,44 @@
     <section id="labels" class="page">
       <div class="card">
         <h2 class="sticky-header">Print Labels</h2>
-        <div class="filter-bar">
-          <select id="label-lokation">
-            <option value="">Alle lokationer</option>
-          </select>
-          <select id="label-reol">
-            <option value="">Alle reoler</option>
-          </select>
-          <select id="label-hylde">
-            <option value="">Alle hylder</option>
-          </select>
-          <button class="btn-secondary" onclick="generateLabels()">Generer labels</button>
-          <button class="btn-print" onclick="printLabels()">🖨️ Print labels</button>
+        
+        <!-- Labels Vin -->
+        <div style="margin-bottom: 40px; padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #2d5016;">🍷 Labels Vin</h3>
+          <div class="filter-bar">
+            <select id="label-lokation">
+              <option value="">Alle lokationer</option>
+            </select>
+            <select id="label-reol">
+              <option value="">Alle reoler</option>
+            </select>
+            <select id="label-hylde">
+              <option value="">Alle hylder</option>
+            </select>
+            <button class="btn-secondary" onclick="generateLabels('vin')">Generer labels</button>
+            <button class="btn-print" onclick="printLabels('vin')">🖨️ Print labels</button>
+          </div>
+          <div id="labels-container" class="labels-container"></div>
         </div>
-        <div id="labels-container" class="labels-container"></div>
+
+        <!-- Labels Øl & Vand -->
+        <div style="padding: 20px; border: 2px solid #2196F3; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #1565C0;">🍺 Labels Øl & Vand</h3>
+          <div class="filter-bar">
+            <select id="label-lokation-ol-vand">
+              <option value="">Alle lokationer</option>
+            </select>
+            <select id="label-reol-ol-vand">
+              <option value="">Alle reoler</option>
+            </select>
+            <select id="label-hylde-ol-vand">
+              <option value="">Alle hylder</option>
+            </select>
+            <button class="btn-secondary" onclick="generateLabels('ol-vand')">Generer labels</button>
+            <button class="btn-print" onclick="printLabels('ol-vand')" style="background: #2196F3;">🖨️ Print labels</button>
+          </div>
+          <div id="labels-container-ol-vand" class="labels-container"></div>
+        </div>
       </div>
     </section>
 
@@ -562,7 +683,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=89"></script>
+      <script src="app.js?v=90"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

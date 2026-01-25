@@ -1,14 +1,15 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v87
+// VINLAGER OPTÆLLING 2026 - APP.JS v88
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v87 - FIX: initIndexedDB defineret før brug + 100% DATA SIKKERHED: Multi-layer backup');
+console.log('Version: v88 - MULTI-CATEGORY SUPPORT: Øl & Vand (Dashboard, Lager, Import, Labels)');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
 // Global state
 let allWines = [];
+let allOlVand = []; // Øl & Vand produkter
 let currentWine = null;
 let currentCount = null;
 
@@ -113,6 +114,21 @@ function startAutoUpdate() {
           // Hvis fejl, opdater alligevel med eksisterende data
           if (typeof updateDashboard === 'function') updateDashboard();
           if (typeof renderLager === 'function') renderLager();
+        });
+      }
+      
+      // Opdater også Øl & Vand
+      if (typeof loadOlVand === 'function') {
+        loadOlVand().then(() => {
+          if (typeof updateDashboardOlVand === 'function') {
+            updateDashboardOlVand();
+          }
+          if (typeof renderOlVandLager === 'function') {
+            renderOlVandLager();
+          }
+        }).catch(() => {
+          if (typeof updateDashboardOlVand === 'function') updateDashboardOlVand();
+          if (typeof renderOlVandLager === 'function') renderOlVandLager();
         });
       }
       
@@ -1988,23 +2004,51 @@ function showError(message) {
 
 // Import
 function setupFileInput() {
-  const fileInput = document.getElementById('file-input');
-  if (!fileInput) {
-    console.warn('file-input element ikke fundet - skip setup');
-    return;
+  // Setup Vin file input
+  const fileInputVin = document.getElementById('file-input-vin');
+  if (fileInputVin) {
+    fileInputVin.addEventListener('change', (e) => {
+      const fileNameEl = document.getElementById('file-name-vin');
+      if (fileNameEl) {
+        fileNameEl.textContent = e.target.files[0]?.name || '';
+      }
+    });
   }
-  fileInput.addEventListener('change', (e) => {
-    const fileName = e.target.files[0]?.name || '';
-    const fileNameEl = document.getElementById('file-name');
-    if (fileNameEl) {
-      fileNameEl.textContent = fileName;
-    }
-  });
+  
+  // Setup Øl & Vand file input
+  const fileInputOlVand = document.getElementById('file-input-ol-vand');
+  if (fileInputOlVand) {
+    fileInputOlVand.addEventListener('change', (e) => {
+      const fileNameEl = document.getElementById('file-name-ol-vand');
+      if (fileNameEl) {
+        fileNameEl.textContent = e.target.files[0]?.name || '';
+      }
+    });
+  }
+  
+  // Backward compatibility - old file-input
+  const fileInput = document.getElementById('file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const fileName = e.target.files[0]?.name || '';
+      const fileNameEl = document.getElementById('file-name');
+      if (fileNameEl) {
+        fileNameEl.textContent = fileName;
+      }
+    });
+  }
 }
 
 // Download Excel skabelon
-async function downloadTemplate() {
+async function downloadTemplate(category = 'vin') {
   try {
+    if (category === 'ol-vand') {
+      // Generer Excel skabelon for Øl & Vand lokalt
+      await downloadOlVandTemplate();
+      return;
+    }
+    
+    // Vin template fra backend
     const config = getConfig();
     const response = await fetch(`${config.API_URL}/api/import/template`, {
       method: 'GET'
@@ -2024,7 +2068,6 @@ async function downloadTemplate() {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
     
-    // Vis success besked
     showSuccess('Excel skabelon downloadet! Filen hedder: vinlager_skabelon.xlsx');
   } catch (error) {
     console.error('Fejl ved download af skabelon:', error);
@@ -2032,16 +2075,119 @@ async function downloadTemplate() {
   }
 }
 
-async function doImport() {
-  const fileInput = document.getElementById('file-input');
-  const file = fileInput.files[0];
+// Generer Excel skabelon for Øl & Vand lokalt
+async function downloadOlVandTemplate() {
+  try {
+    // Alle produkter fra brugerens liste
+    const produkter = [
+      // FADØL
+      { navn: 'Pilsner – 20 L', kategori: 'Fadøl', type: 'Pilsner', størrelse: '20 L' },
+      { navn: 'Pilsner – 25 L', kategori: 'Fadøl', type: 'Pilsner', størrelse: '25 L' },
+      { navn: 'Pilsner – 30 L', kategori: 'Fadøl', type: 'Pilsner', størrelse: '30 L' },
+      { navn: 'Pilsner – 50 L', kategori: 'Fadøl', type: 'Pilsner', størrelse: '50 L' },
+      { navn: 'Classic – 20 L', kategori: 'Fadøl', type: 'Classic', størrelse: '20 L' },
+      { navn: 'Classic – 25 L', kategori: 'Fadøl', type: 'Classic', størrelse: '25 L' },
+      { navn: 'Classic – 30 L', kategori: 'Fadøl', type: 'Classic', størrelse: '30 L' },
+      { navn: 'IPA – 20 L', kategori: 'Fadøl', type: 'IPA', størrelse: '20 L' },
+      { navn: 'IPA – 25 L', kategori: 'Fadøl', type: 'IPA', størrelse: '25 L' },
+      { navn: 'Hvedeøl – 20 L', kategori: 'Fadøl', type: 'Hvedeøl', størrelse: '20 L' },
+      { navn: 'Hvedeøl – 30 L', kategori: 'Fadøl', type: 'Hvedeøl', størrelse: '30 L' },
+      { navn: 'Sæsonøl / Special – 20 L', kategori: 'Fadøl', type: 'Sæsonøl / Special', størrelse: '20 L' },
+      // FLASKE- & DÅSEØL
+      { navn: 'Pilsner – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Pilsner', størrelse: '33 cl' },
+      { navn: 'Pilsner – 50 cl', kategori: 'Flaske- & Dåseøl', type: 'Pilsner', størrelse: '50 cl' },
+      { navn: 'Classic – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Classic', størrelse: '33 cl' },
+      { navn: 'Classic – 50 cl', kategori: 'Flaske- & Dåseøl', type: 'Classic', størrelse: '50 cl' },
+      { navn: 'IPA – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'IPA', størrelse: '33 cl' },
+      { navn: 'IPA – 44 cl', kategori: 'Flaske- & Dåseøl', type: 'IPA', størrelse: '44 cl' },
+      { navn: 'Pale Ale – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Pale Ale', størrelse: '33 cl' },
+      { navn: 'Hvedeøl – 50 cl', kategori: 'Flaske- & Dåseøl', type: 'Hvedeøl', størrelse: '50 cl' },
+      { navn: 'Brown Ale – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Brown Ale', størrelse: '33 cl' },
+      { navn: 'Stout / Porter – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Stout / Porter', størrelse: '33 cl' },
+      { navn: 'Sour – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Sour', størrelse: '33 cl' },
+      { navn: 'Alkoholfri pilsner – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Alkoholfri pilsner', størrelse: '33 cl' },
+      { navn: 'Alkoholfri IPA – 33 cl', kategori: 'Flaske- & Dåseøl', type: 'Alkoholfri IPA', størrelse: '33 cl' },
+      // VAND – UDEN BRUS
+      { navn: 'Kildevand – 25 cl', kategori: 'Vand – Uden brus', type: 'Kildevand', størrelse: '25 cl' },
+      { navn: 'Kildevand – 50 cl', kategori: 'Vand – Uden brus', type: 'Kildevand', størrelse: '50 cl' },
+      { navn: 'Kildevand – 75 cl', kategori: 'Vand – Uden brus', type: 'Kildevand', størrelse: '75 cl' },
+      { navn: 'Kildevand – 1,0 L', kategori: 'Vand – Uden brus', type: 'Kildevand', størrelse: '1,0 L' },
+      { navn: 'Still water (import) – 75 cl', kategori: 'Vand – Uden brus', type: 'Still water (import)', størrelse: '75 cl' },
+      // VAND – MED BRUS
+      { navn: 'Danskvand – 25 cl', kategori: 'Vand – Med brus', type: 'Danskvand', størrelse: '25 cl' },
+      { navn: 'Danskvand – 50 cl', kategori: 'Vand – Med brus', type: 'Danskvand', størrelse: '50 cl' },
+      { navn: 'Mineralvand – 75 cl', kategori: 'Vand – Med brus', type: 'Mineralvand', størrelse: '75 cl' },
+      { navn: 'Mineralvand – 1,0 L', kategori: 'Vand – Med brus', type: 'Mineralvand', størrelse: '1,0 L' },
+      { navn: 'Sparkling water (import) – 75 cl', kategori: 'Vand – Med brus', type: 'Sparkling water (import)', størrelse: '75 cl' },
+      // SODAVAND
+      { navn: 'Cola – 25 cl', kategori: 'Sodavand', type: 'Cola', størrelse: '25 cl' },
+      { navn: 'Cola Zero – 25 cl', kategori: 'Sodavand', type: 'Cola Zero', størrelse: '25 cl' },
+      { navn: 'Cola – 33 cl', kategori: 'Sodavand', type: 'Cola', størrelse: '33 cl' },
+      { navn: 'Lemon – 25 cl', kategori: 'Sodavand', type: 'Lemon', størrelse: '25 cl' },
+      { navn: 'Appelsinvand – 25 cl', kategori: 'Sodavand', type: 'Appelsinvand', størrelse: '25 cl' },
+      { navn: 'Tonic – 20 cl', kategori: 'Sodavand', type: 'Tonic', størrelse: '20 cl' },
+      { navn: 'Tonic – 25 cl', kategori: 'Sodavand', type: 'Tonic', størrelse: '25 cl' },
+      { navn: 'Ginger Beer – 20 cl', kategori: 'Sodavand', type: 'Ginger Beer', størrelse: '20 cl' },
+      { navn: 'Ginger Ale – 25 cl', kategori: 'Sodavand', type: 'Ginger Ale', størrelse: '25 cl' }
+    ];
+    
+    // Generer CSV indhold
+    const headers = ['VIN-ID', 'Varenummer', 'Navn', 'Kategori', 'Type', 'Størrelse', 'Lokation', 'Reol', 'Hylde', 'Antal', 'Min. Antal', 'Indkøbspris'];
+    const rows = produkter.map((p, index) => {
+      const vinId = `OL-${String(index + 1).padStart(4, '0')}`;
+      const varenummer = `W${String(index + 1000).padStart(4, '0')}`;
+      return [
+        vinId,
+        varenummer,
+        p.navn,
+        p.kategori,
+        p.type,
+        p.størrelse,
+        '', // Lokation - tom så brugeren kan udfylde
+        '', // Reol - tom
+        '', // Hylde - tom
+        '0', // Antal
+        '24', // Min. Antal
+        '0.00' // Indkøbspris
+      ];
+    });
+    
+    // Konverter til CSV format
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+    ].join('\r\n');
+    
+    // Opret Excel fil (bruger CSV format med .xlsx extension - backend kan håndtere det)
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ol_vand_skabelon.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    showSuccess('Excel skabelon for Øl & Vand downloadet! Filen hedder: ol_vand_skabelon.csv');
+  } catch (error) {
+    console.error('Fejl ved generering af Øl & Vand skabelon:', error);
+    showError('Kunne ikke generere skabelon: ' + error.message);
+  }
+}
+
+async function doImport(category = 'vin') {
+  const fileInputId = category === 'ol-vand' ? 'file-input-ol-vand' : 'file-input-vin';
+  const fileInput = document.getElementById(fileInputId);
+  const file = fileInput?.files[0];
   
   if (!file) {
     alert('Vælg venligst en fil');
     return;
   }
 
-  const mode = document.querySelector('input[name="import-mode"]:checked').value;
+  const modeSelector = category === 'ol-vand' ? 'input[name="import-mode-ol-vand"]' : 'input[name="import-mode-vin"]';
+  const mode = document.querySelector(modeSelector + ':checked')?.value || 'opdater';
   
   // Advarsel hvis overskriv mode er valgt
   if (mode === 'overskriv') {
@@ -2057,15 +2203,21 @@ async function doImport() {
   }
   
   // Vis loading
-  const resultsDiv = document.getElementById('import-results');
+  const resultsDivId = category === 'ol-vand' ? 'import-results-ol-vand' : 'import-results-vin';
+  const resultsContentId = category === 'ol-vand' ? 'import-results-content-ol-vand' : 'import-results-content-vin';
+  const resultsDiv = document.getElementById(resultsDivId);
   if (resultsDiv) {
     resultsDiv.style.display = 'block';
-    document.getElementById('import-results-content').innerHTML = '<p>Importerer... Vent venligst.</p>';
+    const contentDiv = document.getElementById(resultsContentId);
+    if (contentDiv) {
+      contentDiv.innerHTML = '<p>Importerer... Vent venligst.</p>';
+    }
   }
   
   const formData = new FormData();
   formData.append('file', file);
   formData.append('mode', mode);
+  formData.append('category', category); // Tilføj kategori til backend
 
   try {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
@@ -2100,9 +2252,12 @@ async function doImport() {
     renderLager();
     console.log('✅ Varelager genindlæst');
   } catch (error) {
-    document.getElementById('import-results').style.display = 'block';
-    document.getElementById('import-results-content').innerHTML = 
-      `<div class="error-message">Fejl: ${error.message}</div>`;
+    const resultsDiv = document.getElementById(resultsDivId);
+    const resultsContent = document.getElementById(resultsContentId);
+    if (resultsDiv && resultsContent) {
+      resultsDiv.style.display = 'block';
+      resultsContent.innerHTML = `<div class="error-message">Fejl: ${error.message}</div>`;
+    }
   }
 }
 
@@ -2152,17 +2307,26 @@ async function generateLabels() {
     filtered = filtered.filter(w => w.hylde === hyldeFilter);
   }
 
-  const container = document.getElementById('labels-container');
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error(`Container ${containerId} ikke fundet!`);
+    return;
+  }
   container.innerHTML = '';
 
-  filtered.forEach((wine, index) => {
+  filtered.forEach((item, index) => {
+    const wine = item; // For kompatibilitet
     const label = document.createElement('div');
     label.className = 'label';
     const qrId = `qr-${wine.vinId}-${index}-${Date.now()}`;
+    const displayInfo = category === 'ol-vand' 
+      ? `<div>${wine.kategori || wine.type || ''} ${wine.størrelse || ''}</div>`
+      : `<div>${wine.land || ''} ${wine.årgang || ''}</div>`;
+    
     label.innerHTML = `
       <div class="label-info">
         <strong>${wine.navn || ''}</strong>
-        <div>${wine.land || ''} ${wine.årgang || ''}</div>
+        ${displayInfo}
         <div><strong>Lokation:</strong> ${wine.lokation || 'Ukendt'}</div>
         <div>Reol ${wine.reol || ''} - Hylde ${wine.hylde || ''}</div>
       </div>
@@ -2333,8 +2497,9 @@ function showImageModal(imageUrl) {
 }
 
 // Print kun labels
-function printLabels() {
-  const container = document.getElementById('labels-container');
+function printLabels(category = 'vin') {
+  const containerId = category === 'ol-vand' ? 'labels-container-ol-vand' : 'labels-container';
+  const container = document.getElementById(containerId);
   if (!container || container.children.length === 0) {
     showError('Ingen labels at printe. Generer labels først.');
     return;
@@ -4240,6 +4405,7 @@ async function generateVærdiReportPDF(report, download = false) {
 // Dette skal være sidst i filen, efter alle funktioner er defineret
 if (typeof window !== 'undefined') {
   window.uploadWineImage = uploadWineImage;
+  window.uploadOlVandImage = uploadOlVandImage;
   window.deleteWineImage = deleteWineImage;
   window.showImageModal = showImageModal;
   window.showVineOversigt = showVineOversigt;
@@ -4695,6 +4861,302 @@ async function finishCounting() {
   }
 }
 
+// ============================================
+// ØL & VAND FUNKTIONER
+// ============================================
+
+// Load Øl & Vand produkter (filtreret fra allWines baseret på kategori)
+async function loadOlVand() {
+  try {
+    console.log('🔄 Henter Øl & Vand produkter...');
+    // Hent alle produkter og filtrer efter kategori
+    const allProducts = await apiCall('/api/wines');
+    console.log('📦 Modtaget fra backend:', allProducts ? allProducts.length : 0, 'produkter');
+    
+    // Filtrer kun Øl & Vand (kategori = 'Øl' eller 'Vand' eller 'Sodavand' eller 'Fadøl' eller 'Flaske- & Dåseøl')
+    const olVand = (allProducts || []).filter(p => {
+      const kategori = (p.kategori || p.type || '').toLowerCase();
+      const navn = (p.navn || '').toLowerCase();
+      // Tjek både kategori og navn for at fange alle varianter
+      return kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+             kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
+             navn.includes('øl') || navn.includes('vand') || navn.includes('cola') || navn.includes('tonic') ||
+             navn.includes('ginger') || navn.includes('lemon') || navn.includes('appelsin') ||
+             kategori === 'ol' || kategori === 'vand' || kategori === 'sodavand';
+    });
+    
+    allOlVand = olVand.map(p => {
+      p.antal = parseInt(p.antal) || 0;
+      p.minAntal = parseInt(p.minAntal) || 24;
+      return p;
+    });
+    
+    console.log(`✅ Hentet ${allOlVand.length} Øl & Vand produkter`);
+    
+    // Gem backup
+    await saveOlVandBackup(allOlVand);
+    
+    // Opdater dashboard og tabel
+    updateDashboardOlVand();
+    populateFiltersOlVand();
+    renderOlVandLager();
+  } catch (error) {
+    console.error('❌ Fejl ved indlæsning af Øl & Vand:', error.message);
+    if (allOlVand && allOlVand.length > 0) {
+      console.warn(`⚠️ API fejl, men beholder ${allOlVand.length} eksisterende produkter.`);
+    }
+    updateDashboardOlVand();
+    renderOlVandLager();
+  }
+}
+
+// Dashboard for Øl & Vand
+function updateDashboardOlVand() {
+  if (!allOlVand || !Array.isArray(allOlVand)) {
+    allOlVand = [];
+  }
+  
+  const antOlVand = allOlVand.length;
+  const totalVærdi = allOlVand.reduce((sum, p) => {
+    const pris = parseFloat(p.indkøbspris) || 0;
+    const antal = parseInt(p.antal) || 0;
+    return sum + (pris * antal);
+  }, 0);
+  
+  const lavtLager = allOlVand.filter(p => {
+    const antal = parseInt(p.antal) || 0;
+    const minAntal = parseInt(p.minAntal) || 24;
+    return antal < minAntal;
+  }).length;
+  
+  const statAntOlVand = document.getElementById('stat-ant-ol-vand');
+  const statVærdiOlVand = document.getElementById('stat-værdi-ol-vand');
+  const statLavtOlVand = document.getElementById('stat-lavt-ol-vand');
+  
+  if (statAntOlVand) statAntOlVand.textContent = antOlVand;
+  if (statVærdiOlVand) {
+    if (typeof formatDanskPris === 'function') {
+      statVærdiOlVand.textContent = `${formatDanskPris(totalVærdi)} kr.`;
+    } else {
+      statVærdiOlVand.textContent = `${totalVærdi.toFixed(2)} kr.`;
+    }
+  }
+  if (statLavtOlVand) {
+    statLavtOlVand.textContent = lavtLager;
+    if (lavtLager > 0) {
+      statLavtOlVand.classList.add('warning');
+      statLavtOlVand.style.color = '#c00';
+      statLavtOlVand.style.fontWeight = 'bold';
+      statLavtOlVand.style.cursor = 'pointer';
+      statLavtOlVand.onclick = () => showOlVandOversigt('lavt');
+      statLavtOlVand.title = 'Klik for at se oversigt over Øl & Vand i lavt lager';
+    } else {
+      statLavtOlVand.classList.remove('warning');
+      statLavtOlVand.style.color = '';
+      statLavtOlVand.style.fontWeight = '';
+      statLavtOlVand.style.cursor = '';
+      statLavtOlVand.onclick = null;
+      statLavtOlVand.title = '';
+    }
+  }
+}
+
+// Vis Øl & Vand oversigt modal
+function showOlVandOversigt(type) {
+  const modal = document.getElementById('vine-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const modalStats = document.getElementById('modal-stats');
+  const modalTbody = document.getElementById('modal-vine-tbody');
+  
+  if (!modal) return;
+  
+  if (!allOlVand || !Array.isArray(allOlVand)) {
+    allOlVand = [];
+  }
+  
+  let filtered = allOlVand;
+  if (type === 'lavt') {
+    filtered = allOlVand.filter(p => {
+      const antal = parseInt(p.antal) || 0;
+      const minAntal = parseInt(p.minAntal) || 24;
+      return antal < minAntal;
+    });
+  }
+  
+  modalTitle.textContent = type === 'lavt' ? 'Øl & Vand i lavt lager' : 'Alle Øl & Vand';
+  modalStats.innerHTML = `<strong>${filtered.length}</strong> produkter`;
+  
+  modalTbody.innerHTML = '';
+  filtered.forEach(p => {
+    const antal = parseInt(p.antal) || 0;
+    const minAntal = parseInt(p.minAntal) || 24;
+    const status = antal < minAntal ? '🔴 Lavt' : antal < minAntal * 1.5 ? '🟡 OK' : '🟢 Godt';
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${p.varenummer || p.vinId || ''}</td>
+      <td>${p.navn || ''}</td>
+      <td>${p.kategori || p.type || ''}</td>
+      <td>${p.lokation || ''}</td>
+      <td>${antal}</td>
+      <td>${minAntal}</td>
+      <td>${status}</td>
+    `;
+    modalTbody.appendChild(row);
+  });
+  
+  modal.style.display = 'flex';
+}
+
+// Render Øl & Vand lager tabel
+function renderOlVandLager() {
+  if (!allOlVand || !Array.isArray(allOlVand)) {
+    allOlVand = [];
+  }
+  
+  const tbody = document.getElementById('ol-vand-lager-tbody');
+  if (!tbody) {
+    console.error('❌ ol-vand-lager-tbody element ikke fundet!');
+    return;
+  }
+  
+  const lokationFilter = document.getElementById('filter-lokation-ol-vand')?.value || '';
+  const reolFilter = document.getElementById('filter-reol-ol-vand')?.value || '';
+  const hyldeFilter = document.getElementById('filter-hylde-ol-vand')?.value || '';
+  
+  let filtered = allOlVand;
+  
+  if (lokationFilter) {
+    filtered = filtered.filter(p => p.lokation === lokationFilter);
+  }
+  if (reolFilter) {
+    filtered = filtered.filter(p => p.reol === reolFilter);
+  }
+  if (hyldeFilter) {
+    filtered = filtered.filter(p => p.hylde === hyldeFilter);
+  }
+  
+  tbody.innerHTML = '';
+  
+  filtered.forEach(p => {
+    const antal = parseInt(p.antal) || 0;
+    const minAntal = parseInt(p.minAntal) || 24;
+    const status = antal < minAntal ? 'low' : antal < minAntal * 1.5 ? 'medium' : 'good';
+    
+    const row = document.createElement('tr');
+    row.className = status;
+    row.innerHTML = `
+      <td>${p.vinId || ''}</td>
+      <td>${p.varenummer || ''}</td>
+      <td>${p.navn || ''}</td>
+      <td>${p.type || ''}</td>
+      <td>${p.kategori || ''}</td>
+      <td>${p.lokation || ''}</td>
+      <td>${p.reol || ''}</td>
+      <td>${p.hylde || ''}</td>
+      <td class="text-right">${antal}</td>
+      <td class="text-right">${minAntal}</td>
+      <td class="text-right">${(p.indkøbspris || 0).toFixed(2)}</td>
+      <td>
+        ${p.billede ? `<img src="${p.billede}" style="max-width: 50px; max-height: 50px; cursor: pointer;" onclick="showImageModal('${p.billede}')">` : 
+          `<div onclick="const input = document.getElementById('image-input-${p.vinId}'); if(input) input.click();" 
+               style="border: 2px dashed #ccc; padding: 8px; text-align: center; cursor: pointer; border-radius: 4px; background: #fafafa; display: inline-block;">
+            <div style="font-size: 16px; color: #999;">+</div>
+            <div style="font-size: 10px; color: #666;">Billede</div>
+          </div>
+          <input type="file" id="image-input-${p.vinId}" accept="image/*" style="display: none;" 
+                 onchange="uploadOlVandImage(this, '${p.vinId}')">`}
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// Populate filters for Øl & Vand
+function populateFiltersOlVand() {
+  if (!allOlVand || !Array.isArray(allOlVand)) {
+    return;
+  }
+  
+  const lokationSelect = document.getElementById('filter-lokation-ol-vand');
+  const reolSelect = document.getElementById('filter-reol-ol-vand');
+  const hyldeSelect = document.getElementById('filter-hylde-ol-vand');
+  
+  if (lokationSelect) {
+    const lokationer = [...new Set(allOlVand.map(p => p.lokation).filter(Boolean))].sort();
+    lokationSelect.innerHTML = '<option value="">Alle lokationer</option>';
+    lokationer.forEach(loc => {
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = loc;
+      lokationSelect.appendChild(option);
+    });
+  }
+  
+  if (reolSelect) {
+    const reoler = [...new Set(allOlVand.map(p => p.reol).filter(Boolean))].sort();
+    reolSelect.innerHTML = '<option value="">Alle reoler</option>';
+    reoler.forEach(reol => {
+      const option = document.createElement('option');
+      option.value = reol;
+      option.textContent = reol;
+      reolSelect.appendChild(option);
+    });
+  }
+  
+  if (hyldeSelect) {
+    const hylder = [...new Set(allOlVand.map(p => p.hylde).filter(Boolean))].sort();
+    hyldeSelect.innerHTML = '<option value="">Alle hylder</option>';
+    hylder.forEach(hylde => {
+      const option = document.createElement('option');
+      option.value = hylde;
+      option.textContent = hylde;
+      hyldeSelect.appendChild(option);
+    });
+  }
+}
+
+// Apply filter for Øl & Vand
+function applyFilterOlVand() {
+  renderOlVandLager();
+}
+
+// Clear filter for Øl & Vand
+function clearFilterOlVand() {
+  const lokationSelect = document.getElementById('filter-lokation-ol-vand');
+  const reolSelect = document.getElementById('filter-reol-ol-vand');
+  const hyldeSelect = document.getElementById('filter-hylde-ol-vand');
+  
+  if (lokationSelect) lokationSelect.value = '';
+  if (reolSelect) reolSelect.value = '';
+  if (hyldeSelect) hyldeSelect.value = '';
+  
+  renderOlVandLager();
+}
+
+// Backup for Øl & Vand
+async function saveOlVandBackup(products) {
+  if (!products || !Array.isArray(products) || products.length === 0) {
+    return;
+  }
+  
+  try {
+    localStorage.setItem('olVandBackup', JSON.stringify(products));
+    localStorage.setItem('olVandBackup_date', new Date().toISOString());
+    console.log('💾 Øl & Vand backup gemt:', products.length, 'produkter');
+  } catch (e) {
+    console.warn('⚠️ Kunne ikke gemme Øl & Vand backup:', e);
+  }
+}
+
+  // Øl & Vand funktioner
+  window.loadOlVand = loadOlVand;
+  window.updateDashboardOlVand = updateDashboardOlVand;
+  window.showOlVandOversigt = showOlVandOversigt;
+  window.renderOlVandLager = renderOlVandLager;
+  window.populateFiltersOlVand = populateFiltersOlVand;
+  window.applyFilterOlVand = applyFilterOlVand;
+  window.clearFilterOlVand = clearFilterOlVand;
+  
   window.handleLogin = handleLogin;
   window.handleLogout = handleLogout;
   window.showPasswordReset = showPasswordReset;
