@@ -219,29 +219,69 @@
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
-    // API CALL
+    // API CALL - MED AUTHENTICATION
     async function apiCall(endpoint, options = {}) {
       const config = getConfig();
       const url = `${config.API_URL}${endpoint}`;
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), config.TIMEOUT || 60000);
       
+      // KRITISK: Hent auth token fra localStorage
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+      
       console.log(`🌐 API kald: ${options.method || 'GET'} ${url}`);
       if (options.body) {
         console.log(`📦 Request body:`, options.body);
       }
+      if (token) {
+        console.log('🔐 Auth token fundet');
+      } else {
+        console.warn('⚠️ Ingen auth token fundet - request kan fejle');
+      }
       
       try {
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(options.headers || {})
+        };
+        
+        // Tilføj auth token hvis det findes
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const response = await fetch(url, {
           ...options,
           signal: ac.signal,
-          headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+          headers: headers
         });
         clearTimeout(tid);
         
         console.log(`📥 Response status: ${response.status} ${response.statusText}`);
         
         if (!response.ok) {
+          // Hvis 401, prøv at hente token fra auth objekt
+          if (response.status === 401) {
+            console.warn('⚠️ 401 Unauthorized - tjekker auth...');
+            // Prøv at hente token fra auth hvis det findes
+            if (typeof auth !== 'undefined' && auth && auth.getToken) {
+              const authToken = auth.getToken();
+              if (authToken && authToken !== token) {
+                console.log('🔄 Prøver igen med token fra auth objekt');
+                headers['Authorization'] = `Bearer ${authToken}`;
+                const retryResponse = await fetch(url, {
+                  ...options,
+                  signal: ac.signal,
+                  headers: headers
+                });
+                if (retryResponse.ok) {
+                  const data = await retryResponse.json();
+                  return data;
+                }
+              }
+            }
+          }
+          
           const errorText = await response.text();
           console.error(`❌ API fejl ${response.status}:`, errorText);
           throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
@@ -280,27 +320,12 @@
       };
       
       try {
-        const config = getConfig();
-        if (!config || !config.API_URL) {
-          showStatus('FEJL: Backend URL ikke fundet', 'error', 5000);
-          locationsLoaded = true;
-          select.innerHTML = '<option value="">Alle lokationer</option>';
-          startQRScannerWhenReady();
-          return;
-        }
+        showStatus('Henter lokationer...', 'info', 0);
         
-        showStatus(`Henter lokationer fra ${config.API_URL}...`, 'info', 0);
-        const response = await fetch(`${config.API_URL}/api/locations`);
+        // KRITISK FIX: Brug apiCall() i stedet for fetch() så authentication virker!
+        const data = await apiCall('/api/locations');
         
-        if (!response.ok) {
-          showStatus(`FEJL: Kunne ikke hente lokationer (${response.status})`, 'warning', 5000);
-          locationsLoaded = true;
-          select.innerHTML = '<option value="">Alle lokationer</option>';
-          startQRScannerWhenReady();
-          return;
-        }
-        
-        const data = await response.json();
+        console.log('📦 Lokationer modtaget:', data);
         
         if (Array.isArray(data) && data.length > 0) {
           locations = data;
@@ -312,9 +337,11 @@
             select.appendChild(o);
           });
           showStatus(`✅ ${data.length} lokationer hentet`, 'success', 2000);
+          console.log(`✅ ${data.length} lokationer indlæst`);
         } else {
           showStatus('Ingen lokationer fundet - fortsætter alligevel', 'warning', 3000);
           select.innerHTML = '<option value="">Alle lokationer</option>';
+          console.warn('⚠️ Ingen lokationer fundet');
         }
         
         locationsLoaded = true;
@@ -323,7 +350,8 @@
         // Start scanner når lokationer er klar
         startQRScannerWhenReady();
       } catch (e) {
-        showStatus(`FEJL: ${e.message}`, 'error', 5000);
+        console.error('❌ Fejl ved hentning af lokationer:', e);
+        showStatus(`FEJL: ${e.message || 'Kunne ikke hente lokationer'}`, 'error', 5000);
         locationsLoaded = true;
         select.innerHTML = '<option value="">Alle lokationer</option>';
         startQRScannerWhenReady();

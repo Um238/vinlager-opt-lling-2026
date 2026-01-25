@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v78
+// VINLAGER OPTÆLLING 2026 - APP.JS v79
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v78 - SIMPLIFICERET generateLavStatusRapport med omfattende logging');
+console.log('Version: v79 - OMFATTENDE LOGGING I loadWines() og checkLoginStatus()');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -159,12 +159,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Vent lidt før vi loader data, så HTML er helt klar
     setTimeout(() => {
-      if (auth && auth.isLoggedIn()) {
-        loadWines();
-        // Start auto-opdatering
-        startAutoUpdate();
-        // Tjek om der er ny rapport fra mobil
-        checkForNewReport();
+      console.log('🔍 Tjekker login status...');
+      console.log('  auth objekt:', typeof auth !== 'undefined' ? 'findes' : 'MANGLER');
+      if (typeof auth !== 'undefined' && auth) {
+        console.log('  auth.isLoggedIn():', auth.isLoggedIn ? auth.isLoggedIn() : 'FUNKTION MANGLER');
+        if (auth.isLoggedIn && auth.isLoggedIn()) {
+          console.log('✅ Bruger er logget ind - loader data...');
+          loadWines().then(() => {
+            console.log('✅ loadWines() færdig');
+          }).catch(err => {
+            console.error('❌ Fejl i loadWines():', err);
+          });
+          // Start auto-opdatering
+          if (typeof startAutoUpdate === 'function') {
+            startAutoUpdate();
+          }
+          // Tjek om der er ny rapport fra mobil
+          if (typeof checkForNewReport === 'function') {
+            checkForNewReport();
+          }
+        } else {
+          console.warn('⚠️ Bruger er IKKE logget ind');
+        }
+      } else {
+        console.error('❌ auth objekt ikke tilgængelig!');
       }
     }, 100);
     
@@ -423,13 +441,30 @@ async function apiCall(endpoint, options = {}) {
   const tid = setTimeout(() => ac.abort(), ms);
   try {
     const { signal: _s, timeout: _t, ...rest } = options;
+    
+    // KRITISK: Hent auth token
+    let authToken = null;
+    if (typeof auth !== 'undefined' && auth && auth.getToken) {
+      authToken = auth.getToken();
+    } else {
+      // Fallback: Prøv localStorage
+      authToken = localStorage.getItem('auth_token') || localStorage.getItem('jwt_token');
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(rest.headers || {})
+    };
+    
+    // Tilføj auth token hvis det findes
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    
     const response = await fetch(`${config.API_URL}${endpoint}`, {
       ...rest,
       signal: ac.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(rest.headers || {})
-      }
+      headers: headers
     });
 
     if (!response.ok) {
@@ -647,8 +682,15 @@ async function loadWines() {
         w.minAntal = parseInt(w.minAntal) || 24;
       });
       allWines = wines;
-      saveWinesBackup(wines);
-      console.log(`✅ Hentet ${wines.length} vine fra backend - OPDATERET allWines`);
+      console.log(`✅ Hentet ${wines.length} vine fra backend`);
+      console.log(`✅ allWines opdateret til ${allWines.length} vine`);
+      
+      if (typeof saveWinesBackup === 'function') {
+        saveWinesBackup(wines);
+        console.log('✅ Backup gemt');
+      } else {
+        console.warn('⚠️ saveWinesBackup funktion mangler');
+      }
     } else if (wines === null || (Array.isArray(wines) && wines.length === 0)) {
       // Backend returnerer null eller tom array
       // BEHOLD kun eksisterende data hvis vi har noget OG det er første gang vi loader
