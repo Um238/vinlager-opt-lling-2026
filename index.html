@@ -452,11 +452,19 @@
           </label>
         </div>
 
-        <!-- Generer nye rapporter -->
+        <!-- Generer nye rapporter - VIN -->
         <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
-          <h3 style="margin-bottom: 0.5rem;">Generer ny rapport:</h3>
-          <button class="btn-primary" onclick="generateLagerReport()" style="margin-right: 0.5rem;">Lagerrapport (PDF)</button>
-          <button class="btn-primary" onclick="generateVærdiReport()">Værdirapport (PDF)</button>
+          <h3 style="margin-bottom: 0.5rem;">🍷 Generer ny rapport - VIN:</h3>
+          <button class="btn-primary" onclick="generateLagerReport('vin')" style="margin-right: 0.5rem;">Lagerrapport (PDF)</button>
+          <button class="btn-primary" onclick="generateVærdiReport('vin')">Værdirapport (PDF)</button>
+        </div>
+
+        <!-- Generer nye rapporter - ØL & VAND -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #e3f2fd; border-radius: 4px;">
+          <h3 style="margin-bottom: 0.5rem;">🍺 Generer ny rapport - Øl & Vand:</h3>
+          <button class="btn-primary" onclick="generateLagerReport('ol-vand')" style="margin-right: 0.5rem; background: #2196F3;">Lagerrapport (PDF)</button>
+          <button class="btn-primary" onclick="generateVærdiReport('ol-vand')" style="background: #2196F3;">Værdirapport (PDF)</button>
+          <button class="btn-primary" onclick="generateLavStatusRapportOlVand()" style="background: #2196F3; margin-left: 0.5rem;">Lav status rapport</button>
         </div>
 
         <!-- Rapport liste -->
@@ -683,7 +691,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=90"></script>
+      <script src="app.js?v=92"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

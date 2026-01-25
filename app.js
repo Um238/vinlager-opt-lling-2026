@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v88
+// VINLAGER OPTÆLLING 2026 - APP.JS v90
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v88 - MULTI-CATEGORY SUPPORT: Øl & Vand (Dashboard, Lager, Import, Labels)');
+console.log('Version: v90 - FIX: Kategori separation (Vin/Øl&Vand adskilt) + Status rapport Øl&Vand + Scanner support + Import fix');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -876,9 +876,33 @@ function downloadLagerBackupCSV() {
 
 async function loadWines() {
   try {
-    console.log('🔄 Henter vine fra backend...');
-    const wines = await apiCall('/api/wines');
-    console.log('📦 Modtaget fra backend:', wines ? wines.length : 0, 'vine');
+    console.log('🔄 Henter VIN fra backend...');
+    const allProducts = await apiCall('/api/wines');
+    console.log('📦 Modtaget fra backend:', allProducts ? allProducts.length : 0, 'produkter');
+    
+    // KRITISK FIX: Filtrer kun VIN ud (ikke øl & vand)
+    // VIN er ALT der IKKE er øl, vand, sodavand, fadøl, flaske- eller dåseøl
+    const wines = (allProducts || []).filter(p => {
+      const kategori = (p.kategori || p.type || '').toLowerCase();
+      const navn = (p.navn || '').toLowerCase();
+      const vinId = (p.vinId || '').toLowerCase();
+      
+      // Hvis det starter med "OL-" eller "W" og er et nummer, er det øl & vand
+      if (vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId)) {
+        return false;
+      }
+      
+      // Filtrer øl & vand produkter ud
+      const isOlVand = kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+                      kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
+                      navn.includes('øl') || navn.includes('vand') || navn.includes('cola') || navn.includes('tonic') ||
+                      navn.includes('ginger') || navn.includes('lemon') || navn.includes('appelsin') ||
+                      kategori === 'ol' || kategori === 'vand' || kategori === 'sodavand';
+      
+      return !isOlVand; // Returner kun VIN (ikke øl & vand)
+    });
+    
+    console.log(`✅ Filtreret til ${wines.length} VIN (fra ${allProducts ? allProducts.length : 0} produkter)`);
     
     // Hent optalte vine i dag (ikke blokerende)
     loadCountedWinesToday().catch(() => {});
@@ -1110,20 +1134,41 @@ function showVineOversigt(type) {
     allWines = [];
   }
   
+  // KRITISK FIX: Filtrer øl & vand fra allWines (kun VIN skal vises)
+  const onlyWines = allWines.filter(w => {
+    const kategori = (w.kategori || w.type || '').toLowerCase();
+    const navn = (w.navn || '').toLowerCase();
+    const vinId = (w.vinId || '').toLowerCase();
+    
+    // Hvis det starter med "OL-" eller "W" og er et nummer, er det øl & vand
+    if (vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId)) {
+      return false;
+    }
+    
+    // Filtrer øl & vand produkter ud
+    const isOlVand = kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+                    kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
+                    navn.includes('øl') || navn.includes('vand') || navn.includes('cola') || navn.includes('tonic') ||
+                    navn.includes('ginger') || navn.includes('lemon') || navn.includes('appelsin') ||
+                    kategori === 'ol' || kategori === 'vand' || kategori === 'sodavand';
+    
+    return !isOlVand; // Returner kun VIN
+  });
+  
   // Filtrer vine
   let filteredWines = [];
   if (type === 'lavt') {
     // Filtrer korrekt - tjek både antal og minAntal
     // KRITISK FIX: Brug parseInt for at sikre tal sammenligning
-    filteredWines = allWines.filter(w => {
+    filteredWines = onlyWines.filter(w => {
       const antal = parseInt(w.antal) || 0;
       const minAntal = parseInt(w.minAntal) || 24;
       return antal < minAntal;
     });
     if (modalTitle) modalTitle.textContent = `Lavt Lager - Oversigt (${filteredWines.length} vine)`;
-    console.log(`📊 Viser ${filteredWines.length} vine i lavt lager`);
+    console.log(`📊 Viser ${filteredWines.length} VIN i lavt lager`);
   } else {
-    filteredWines = allWines;
+    filteredWines = onlyWines;
     if (modalTitle) modalTitle.textContent = `Alle Vine - Oversigt (${filteredWines.length} vine)`;
   }
   
@@ -2218,6 +2263,10 @@ async function doImport(category = 'vin') {
   formData.append('file', file);
   formData.append('mode', mode);
   formData.append('category', category); // Tilføj kategori til backend
+  
+  // KRITISK: Hvis kategori er 'ol-vand', sørg for at alle produkter får kategori sat
+  // Backend skal håndtere dette, men vi sender det med alligevel
+  console.log(`📤 Importerer ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'} fil:`, file.name);
 
   try {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
@@ -3865,20 +3914,45 @@ async function generateLavStatusRapport() {
   console.log('=== GENERER LAV STATUS RAPPORT SLUT ===');
 }
 
-async function generateLagerReport() {
+async function generateLagerReport(category = 'vin') {
   try {
-    // KRITISK FIX: Brug allWines direkte i stedet for backend!
+    // KRITISK FIX: Brug korrekt data baseret på kategori
     let wines = [];
-    if (allWines && Array.isArray(allWines) && allWines.length > 0) {
-      console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
-      wines = allWines;
+    if (category === 'ol-vand') {
+      // Brug allOlVand for Øl & Vand
+      if (allOlVand && Array.isArray(allOlVand) && allOlVand.length > 0) {
+        console.log('✅ Bruger allOlVand direkte:', allOlVand.length, 'Øl & Vand produkter');
+        wines = allOlVand;
+      } else {
+        console.warn('⚠️ allOlVand er tom - prøver at hente...');
+        await loadOlVand();
+        wines = allOlVand || [];
+      }
     } else {
-      console.warn('⚠️ allWines er tom - prøver backend...');
-      wines = await apiCall('/api/reports/lager');
+      // Brug allWines for VIN (filtreret)
+      if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+        // Filtrer øl & vand fra
+        wines = allWines.filter(w => {
+          const kategori = (w.kategori || w.type || '').toLowerCase();
+          const navn = (w.navn || '').toLowerCase();
+          const vinId = (w.vinId || '').toLowerCase();
+          if (vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId)) return false;
+          const isOlVand = kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+                          kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
+                          navn.includes('øl') || navn.includes('vand') || navn.includes('cola') || navn.includes('tonic') ||
+                          navn.includes('ginger') || navn.includes('lemon') || navn.includes('appelsin') ||
+                          kategori === 'ol' || kategori === 'vand' || kategori === 'sodavand';
+          return !isOlVand;
+        });
+        console.log('✅ Bruger allWines direkte (filtreret):', wines.length, 'VIN');
+      } else {
+        console.warn('⚠️ allWines er tom - prøver backend...');
+        wines = await apiCall('/api/reports/lager');
+      }
     }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
-      alert('Ingen vine fundet. Klik på "Opdater" knappen eller importer data først.');
+      alert(`Ingen ${category === 'ol-vand' ? 'Øl & Vand' : 'vine'} fundet. Klik på "Opdater" knappen eller importer data først.`);
       return;
     }
     
@@ -4190,15 +4264,57 @@ async function generateLagerReportViewOnly() {
   }
 }
 
-async function generateVærdiReport() {
+async function generateVærdiReport(category = 'vin') {
   try {
-    const report = await apiCall('/api/reports/værdi');
+    // KRITISK FIX: Brug korrekt data baseret på kategori
+    let wines = [];
+    if (category === 'ol-vand') {
+      if (allOlVand && Array.isArray(allOlVand) && allOlVand.length > 0) {
+        wines = allOlVand;
+      } else {
+        await loadOlVand();
+        wines = allOlVand || [];
+      }
+    } else {
+      // Filtrer kun VIN
+      if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+        wines = allWines.filter(w => {
+          const kategori = (w.kategori || w.type || '').toLowerCase();
+          const navn = (w.navn || '').toLowerCase();
+          const vinId = (w.vinId || '').toLowerCase();
+          if (vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId)) return false;
+          const isOlVand = kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+                          kategori.includes('fadøl') || kategori.includes('flaske') || kategori.includes('dåse') ||
+                          navn.includes('øl') || navn.includes('vand') || navn.includes('cola') || navn.includes('tonic') ||
+                          navn.includes('ginger') || navn.includes('lemon') || navn.includes('appelsin') ||
+                          kategori === 'ol' || kategori === 'vand' || kategori === 'sodavand';
+          return !isOlVand;
+        });
+      } else {
+        const report = await apiCall('/api/reports/værdi');
+        wines = report.wines || [];
+      }
+    }
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      alert(`Ingen ${category === 'ol-vand' ? 'Øl & Vand' : 'vine'} fundet.`);
+      return;
+    }
+    
+    // Beregn total værdi
+    let totalVærdi = 0;
+    wines.forEach(w => {
+      const antal = parseInt(w.antal) || 0;
+      const pris = parseFloat(w.indkøbspris) || 0;
+      totalVærdi += antal * pris;
+    });
+    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
     let y = 20;
     doc.setFontSize(16);
-    doc.text('Værdirapport', 14, y);
+    doc.text(category === 'ol-vand' ? 'Værdirapport - Øl & Vand' : 'Værdirapport - Vin', 14, y);
     y += 10;
 
     doc.setFontSize(12);
@@ -5146,6 +5262,122 @@ async function saveOlVandBackup(products) {
   } catch (e) {
     console.warn('⚠️ Kunne ikke gemme Øl & Vand backup:', e);
   }
+}
+
+// Generer lav status rapport for Øl & Vand
+async function generateLavStatusRapportOlVand() {
+  console.log('=== GENERER LAV STATUS RAPPORT ØL & VAND START ===');
+  
+  try {
+    // Hent Øl & Vand data
+    if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
+      await loadOlVand();
+    }
+    
+    if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
+      alert('Ingen Øl & Vand produkter fundet. Importer data først.');
+      return;
+    }
+    
+    // Filtrer kun lavt lager
+    const lavtLager = allOlVand.filter(p => {
+      const antal = parseInt(p.antal) || 0;
+      const minAntal = parseInt(p.minAntal) || 24;
+      return antal < minAntal;
+    });
+    
+    if (lavtLager.length === 0) {
+      alert('Ingen Øl & Vand produkter i lavt lager.');
+      return;
+    }
+    
+    // Beregn total værdi
+    let totalVærdi = 0;
+    lavtLager.forEach(p => {
+      const antal = parseInt(p.antal) || 0;
+      const pris = parseFloat(p.indkøbspris) || 0;
+      totalVærdi += antal * pris;
+    });
+    
+    // Generer PDF (samme struktur som vin rapport)
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Lav Status Rapport - Øl & Vand', 14, y);
+    y += 10;
+    
+    doc.setFontSize(10);
+    doc.text('Genereret: ' + new Date().toLocaleString('da-DK'), 14, y);
+    y += 10;
+    
+    const headers = ['Varenummer', 'Navn', 'Kategori', 'Type', 'Antal', 'Min', 'Pris'];
+    const colWidths = [30, 60, 30, 30, 15, 15, 30];
+    let x = 14;
+    
+    doc.setFontSize(8);
+    headers.forEach((header, i) => {
+      doc.text(header, x, y);
+      x += colWidths[i];
+    });
+    y += 6;
+    
+    lavtLager.forEach(p => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+        x = 14;
+        headers.forEach((header, i) => {
+          doc.text(header, x, y);
+          x += colWidths[i];
+        });
+        y += 6;
+      }
+      
+      const pris = p.indkøbspris || 0;
+      const antal = parseInt(p.antal) || 0;
+      
+      x = 14;
+      const row = [
+        p.varenummer || p.vinId || '',
+        p.navn || '',
+        p.kategori || '',
+        p.type || '',
+        antal,
+        p.minAntal || 24,
+        pris.toFixed(2)
+      ];
+      
+      row.forEach((cell, i) => {
+        doc.text(String(cell).substring(0, 25), x, y);
+        x += colWidths[i];
+      });
+      y += 6;
+    });
+    
+    // Total
+    y += 5;
+    doc.setFontSize(10);
+    doc.text(`Total lagerværdi: ${formatDanskPris(totalVærdi)} kr.`, 14, y);
+    
+    // Gem rapport i historik
+    saveReportToHistory('OPTA-OL-' + Date.now().toString().slice(-6), 'lager-ol-vand', lavtLager.length, totalVærdi);
+    
+    // Åbn PDF
+    const pdfBlob = doc.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    
+    showSuccess(`Lav status rapport genereret! ${lavtLager.length} Øl & Vand produkter i lavt lager.`);
+    
+  } catch (error) {
+    console.error('❌ FEJL:', error);
+    alert('Fejl ved generering af rapport: ' + error.message);
+  }
+  
+  console.log('=== GENERER LAV STATUS RAPPORT ØL & VAND SLUT ===');
 }
 
   // Øl & Vand funktioner

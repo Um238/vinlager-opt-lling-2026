@@ -691,6 +691,9 @@
 
     // HÅNDTER SCAN
     async function handleScan(codeData) {
+      // KRITISK FIX: Scanner skal håndtere både VIN og Øl & Vand
+      // Tjek om det er VIN (starter med VIN-) eller Øl & Vand (starter med OL- eller W)
+      const isOlVand = codeData.startsWith('OL-') || /^W\d{4,}$/.test(codeData);
       if (!codeData || !codeData.trim()) {
         console.warn('⚠️ Tom eller ugyldig QR-kode');
         return;
@@ -769,13 +772,13 @@
         }
         
         if (wine && wine.vinId) {
-          console.log(`✅ Vin fundet via ${foundMethod}:`, wine.vinId, wine.navn);
-          showStatus('Vin fundet!', 'success', 1000);
+          console.log(`✅ ${productType} fundet via ${foundMethod}:`, wine.vinId, wine.navn);
+          showStatus(`${productType} fundet!`, 'success', 1000);
           showQuantityModal(wine, false);
         } else {
-          console.warn('⚠️ Vin ikke fundet - viser "Ukendt vare" modal');
-          showStatus('Vin ikke fundet', 'warning', 2000);
-          showQuantityModal({ vinId: trimmedCode, navn: 'Ukendt vare' }, true);
+          console.warn(`⚠️ ${productType} ikke fundet - viser "Ukendt vare" modal`);
+          showStatus(`${productType} ikke fundet`, 'warning', 2000);
+          showQuantityModal({ vinId: trimmedCode, navn: 'Ukendt vare', kategori: isOlVand ? 'Øl & Vand' : 'Vin' }, true);
         }
       } catch (error) {
         console.error('❌ KRITISK FEJL i handleScan:', error);
