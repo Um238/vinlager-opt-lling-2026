@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v86
+// VINLAGER OPTÆLLING 2026 - APP.JS v87
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v86 - 100% DATA SIKKERHED: Multi-layer backup (localStorage + IndexedDB + sessionStorage) + Auto-restore til backend');
+console.log('Version: v87 - FIX: initIndexedDB defineret før brug + 100% DATA SIKKERHED: Multi-layer backup');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -42,6 +42,38 @@ function getConfig() {
   return window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : {
     API_URL: 'https://vinlager-opt-lling-2026.onrender.com',
     TIMEOUT: 10000
+  });
+}
+
+// KRITISK: IndexedDB backup (større kapacitet end localStorage)
+// DEFINERET TIDLIGT så den kan bruges i DOMContentLoaded
+let idbDB = null;
+async function initIndexedDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      console.warn('⚠️ IndexedDB ikke tilgængelig - bruger kun localStorage');
+      resolve(null);
+      return;
+    }
+    const request = indexedDB.open('VinlagerBackup', 1);
+    request.onerror = () => {
+      console.warn('⚠️ IndexedDB ikke tilgængelig - bruger kun localStorage');
+      resolve(null);
+    };
+    request.onsuccess = () => {
+      idbDB = request.result;
+      console.log('✅ IndexedDB initialiseret');
+      resolve(idbDB);
+    };
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('wines')) {
+        db.createObjectStore('wines', { keyPath: 'backupId' });
+      }
+      if (!db.objectStoreNames.contains('reports')) {
+        db.createObjectStore('reports', { keyPath: 'reportId' });
+      }
+    };
   });
 }
 
@@ -547,23 +579,202 @@ async function loadCountedWinesToday() {
 }
 
 const WINES_BACKUP_KEY = 'vinlager_wines_backup';
+const WINES_BACKUP_KEY_INDEXEDDB = 'vinlager_wines_backup_idb';
 
-function saveWinesBackup(wines) {
-  if (wines && Array.isArray(wines) && wines.length > 0) {
-    try {
-      localStorage.setItem(WINES_BACKUP_KEY, JSON.stringify(wines));
-      localStorage.setItem(WINES_BACKUP_KEY + '_date', new Date().toISOString());
-      console.log('💾 Lager backup gemt:', wines.length, 'vine');
-    } catch (e) {
-      console.warn('Kunne ikke gemme lager backup:', e);
+// Gem lager backup - MULTIPLE BACKUP STRATEGY
+async function saveWinesBackup(wines) {
+  if (!wines || !Array.isArray(wines) || wines.length === 0) {
+    return;
+  }
+  
+  const backupData = {
+    wines: wines,
+    timestamp: new Date().toISOString(),
+    count: wines.length
+  };
+  
+  // BACKUP 1: localStorage (hurtig, begrænset størrelse)
+  try {
+    localStorage.setItem(WINES_BACKUP_KEY, JSON.stringify(wines));
+    localStorage.setItem(WINES_BACKUP_KEY + '_date', new Date().toISOString());
+    console.log('💾 Backup 1 (localStorage):', wines.length, 'vine');
+  } catch (e) {
+    console.warn('⚠️ localStorage backup fejlede:', e);
+  }
+  
+  // BACKUP 2: IndexedDB (større kapacitet)
+  try {
+    if (!idbDB) {
+      await initIndexedDB();
     }
+    if (idbDB) {
+      const transaction = idbDB.transaction(['wines'], 'readwrite');
+      const store = transaction.objectStore('wines');
+      await new Promise((resolve, reject) => {
+        const request = store.put({
+          backupId: 'latest',
+          ...backupData
+        });
+        request.onsuccess = () => {
+          console.log('💾 Backup 2 (IndexedDB):', wines.length, 'vine');
+          resolve();
+        };
+        request.onerror = () => {
+          console.warn('⚠️ IndexedDB backup fejlede');
+          resolve(); // Fortsæt alligevel
+        };
+      });
+    }
+  } catch (e) {
+    console.warn('⚠️ IndexedDB backup fejlede:', e);
+  }
+  
+  // BACKUP 3: SessionStorage (ekstra sikkerhed)
+  try {
+    sessionStorage.setItem(WINES_BACKUP_KEY, JSON.stringify(wines));
+    sessionStorage.setItem(WINES_BACKUP_KEY + '_date', new Date().toISOString());
+    console.log('💾 Backup 3 (sessionStorage):', wines.length, 'vine');
+  } catch (e) {
+    console.warn('⚠️ sessionStorage backup fejlede:', e);
   }
 }
 
-// Denne funktion er nu erstattet af async versionen nedenfor
-// Beholdes for bagudkompatibilitet
+// Gendan lager fra backup - MULTIPLE RESTORE STRATEGY
 async function restoreWinesFromBackup() {
-  return await restoreWinesFromBackupAsync();
+  let wines = null;
+  let source = '';
+  
+  // RESTORE 1: Prøv localStorage først (hurtigst)
+  try {
+    const saved = localStorage.getItem(WINES_BACKUP_KEY);
+    if (saved) {
+      wines = JSON.parse(saved);
+      if (Array.isArray(wines) && wines.length > 0) {
+        source = 'localStorage';
+        console.log(`✅ Backup fundet i ${source}:`, wines.length, 'vine');
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ localStorage restore fejlede:', e);
+  }
+  
+  // RESTORE 2: Prøv IndexedDB hvis localStorage ikke havde data
+  if (!wines || wines.length === 0) {
+    try {
+      if (!idbDB) {
+        await initIndexedDB();
+      }
+      if (idbDB) {
+        const transaction = idbDB.transaction(['wines'], 'readonly');
+        const store = transaction.objectStore('wines');
+        const request = store.get('latest');
+        await new Promise((resolve) => {
+          request.onsuccess = () => {
+            if (request.result && request.result.wines && Array.isArray(request.result.wines) && request.result.wines.length > 0) {
+              wines = request.result.wines;
+              source = 'IndexedDB';
+              console.log(`✅ Backup fundet i ${source}:`, wines.length, 'vine');
+            }
+            resolve();
+          };
+          request.onerror = () => {
+            console.warn('⚠️ IndexedDB restore fejlede');
+            resolve();
+          };
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ IndexedDB restore fejlede:', e);
+    }
+  }
+  
+  // RESTORE 3: Prøv sessionStorage hvis stadig ingen data
+  if (!wines || wines.length === 0) {
+    try {
+      const saved = sessionStorage.getItem(WINES_BACKUP_KEY);
+      if (saved) {
+        wines = JSON.parse(saved);
+        if (Array.isArray(wines) && wines.length > 0) {
+          source = 'sessionStorage';
+          console.log(`✅ Backup fundet i ${source}:`, wines.length, 'vine');
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ sessionStorage restore fejlede:', e);
+    }
+  }
+  
+  // Hvis vi fandt data, opdater allWines og vis status
+  if (wines && Array.isArray(wines) && wines.length > 0) {
+    allWines = wines;
+    updateDashboard();
+    populateFilters();
+    renderLager();
+    if (document.getElementById('scan-input')) setupScanInput();
+    showBackupStatus();
+    console.log(`✅ Lager gendannet fra ${source}:`, wines.length, 'vine');
+    
+    // KRITISK: Automatisk upload til backend hvis backend er tom
+    try {
+      const backendWines = await apiCall('/api/wines');
+      if (!backendWines || !Array.isArray(backendWines) || backendWines.length === 0) {
+        console.log('🔄 Backend er tom - uploader gendannet data automatisk...');
+        await autoRestoreToBackend(wines);
+      }
+    } catch (e) {
+      console.warn('⚠️ Kunne ikke tjekke/upload til backend:', e);
+    }
+    
+    return wines.length;
+  }
+  
+  return 0;
+}
+
+// Automatisk upload gendannet data til backend
+async function autoRestoreToBackend(wines) {
+  if (!wines || !Array.isArray(wines) || wines.length === 0) {
+    return;
+  }
+  
+  console.log(`🔄 Uploader ${wines.length} vine til backend...`);
+  let successCount = 0;
+  let errorCount = 0;
+  
+  for (const wine of wines) {
+    try {
+      // Prøv at oprette vin i backend
+      await apiCall('/api/wines', {
+        method: 'POST',
+        body: JSON.stringify(wine)
+      });
+      successCount++;
+    } catch (e) {
+      // Hvis vin allerede findes, prøv at opdatere
+      try {
+        await apiCall(`/api/wines/${wine.vinId}`, {
+          method: 'PUT',
+          body: JSON.stringify(wine)
+        });
+        successCount++;
+      } catch (e2) {
+        errorCount++;
+        console.warn(`⚠️ Kunne ikke upload vin ${wine.vinId}:`, e2.message);
+      }
+    }
+  }
+  
+  console.log(`✅ Auto-restore færdig: ${successCount} uploadet, ${errorCount} fejl`);
+  
+  if (successCount > 0) {
+    showSuccess(`✅ ${successCount} vine automatisk gendannet til backend!`);
+    // Genhent data fra backend for at sikre synkronisering
+    setTimeout(() => {
+      if (typeof loadWines === 'function') {
+        loadWines();
+      }
+    }, 1000);
+  }
 }
 
 async function gendanLagerFraBackup() {
@@ -669,12 +880,9 @@ async function loadWines() {
       console.log(`✅ Hentet ${wines.length} vine fra backend`);
       console.log(`✅ allWines opdateret til ${allWines.length} vine`);
       
-      if (typeof saveWinesBackup === 'function') {
-        saveWinesBackup(wines);
-        console.log('✅ Backup gemt');
-      } else {
-        console.warn('⚠️ saveWinesBackup funktion mangler');
-      }
+      // KRITISK: Gem backup MED DET SAMME
+      await saveWinesBackup(wines);
+      console.log('✅ Backup gemt (multi-layer)');
     } else if (wines === null || (Array.isArray(wines) && wines.length === 0)) {
       // Backend returnerer null eller tom array
       // BEHOLD kun eksisterende data hvis vi har noget OG det er første gang vi loader
@@ -682,7 +890,7 @@ async function loadWines() {
       if (allWines && allWines.length > 0) {
         // Vi har eksisterende data - BEHOLD det kun hvis backend er tom
         console.log(`⚠️ Backend tom/null, men beholder ${allWines.length} eksisterende vine.`);
-        saveWinesBackup(allWines); // Sikr backup er opdateret
+        await saveWinesBackup(allWines); // Sikr backup er opdateret
       } else {
         // Ingen data - prøv backup
         const n = await restoreWinesFromBackup();
@@ -726,7 +934,7 @@ async function loadWines() {
         const updatedWines = await apiCall('/api/wines');
         if (updatedWines && Array.isArray(updatedWines)) {
           allWines = updatedWines;
-          saveWinesBackup(updatedWines);
+          await saveWinesBackup(updatedWines);
         }
       } catch (err) {
         console.error('Fejl ved genhentning efter opdatering:', err);
