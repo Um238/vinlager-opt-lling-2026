@@ -281,82 +281,7 @@
       </div>
     </section>
 
-    <!-- Import -->
-    <section id="import" class="page">
-      <div class="card">
-        <h2>Import CSV/Excel</h2>
-        
-        <!-- Import sektioner side om side -->
-        <div class="import-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-        
-        <!-- Import Vin -->
-        <div class="import-section" style="padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
-          <h3 style="margin-top: 0; color: #2d5016;">🍷 Import Vin</h3>
-          <div style="margin-bottom: 20px; padding: 15px; background: #e6f7e6; border-radius: 8px; border: 2px solid #4CAF50;">
-            <h4 style="margin-top: 0; color: #2d5016;">📥 Download Excel Skabelon</h4>
-            <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
-            <button class="btn-primary" onclick="downloadTemplate('vin')" style="background: #4CAF50;">
-              📥 Download vinlager_skabelon.xlsx
-            </button>
-          </div>
-          <p>Vælg import-mode:</p>
-          <div class="radio-group">
-            <label><input type="radio" name="import-mode-vin" value="opdater" checked> Opdatér eksisterende vine (anbefalet)</label>
-            <label><input type="radio" name="import-mode-vin" value="tilføj"> Tilføj nye vine (spring eksisterende over)</label>
-            <label><input type="radio" name="import-mode-vin" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
-          </div>
-
-          <div class="file-upload">
-            <label for="file-input-vin" class="file-label">
-              <span>Vælg CSV eller Excel fil</span>
-              <input type="file" id="file-input-vin" accept=".csv,.xlsx,.xls" style="display: none;" data-category="vin">
-            </label>
-            <span id="file-name-vin"></span>
-          </div>
-
-          <button class="btn-primary" onclick="doImport('vin')">Start import vin</button>
-
-          <div id="import-results-vin" style="display: none;">
-            <h4>Import resultat:</h4>
-            <div id="import-results-content-vin"></div>
-          </div>
-        </div>
-
-        <!-- Import Øl & Vand -->
-        <div class="import-section" style="padding: 20px; border: 2px solid #2196F3; border-radius: 8px; min-width: 0;">
-          <h3 style="margin-top: 0; color: #1565C0;">🍺 Import Øl & Vand</h3>
-          <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
-            <h4 style="margin-top: 0; color: #1565C0;">📥 Download Excel Skabelon</h4>
-            <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
-            <button class="btn-primary" onclick="downloadTemplate('ol-vand')" style="background: #2196F3;">
-              📥 Download ol_vand_skabelon.xlsx
-            </button>
-          </div>
-          <p>Vælg import-mode:</p>
-          <div class="radio-group">
-            <label><input type="radio" name="import-mode-ol-vand" value="opdater" checked> Opdatér eksisterende Øl & Vand (anbefalet)</label>
-            <label><input type="radio" name="import-mode-ol-vand" value="tilføj"> Tilføj nye Øl & Vand (spring eksisterende over)</label>
-            <label><input type="radio" name="import-mode-ol-vand" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
-          </div>
-
-          <div class="file-upload">
-            <label for="file-input-ol-vand" class="file-label">
-              <span>Vælg CSV eller Excel fil</span>
-              <input type="file" id="file-input-ol-vand" accept=".csv,.xlsx,.xls" style="display: none;" data-category="ol-vand">
-            </label>
-            <span id="file-name-ol-vand"></span>
-          </div>
-
-          <button class="btn-primary" onclick="doImport('ol-vand')" style="background: #2196F3;">Start import Øl & Vand</button>
-
-          <div id="import-results-ol-vand" style="display: none;">
-            <h4>Import resultat:</h4>
-            <div id="import-results-content-ol-vand"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
+image.png
     <!-- Labels -->
     <section id="labels" class="page">
       <div class="card">
@@ -694,7 +619,7 @@
           console.log('✅ auth.js indlæst korrekt');
         }
       </script>
-      <script src="app.js?v=96"></script>
+      <script src="app.js?v=97"></script>
     </main>
 
     <!-- Modal for vine oversigt -->

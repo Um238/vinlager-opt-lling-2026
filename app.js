@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v94
+// VINLAGER OPTÆLLING 2026 - APP.JS v95
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v94 - FIX: loadOlVand undefined + Auth token check + Tabel opdatering + Scanner lokationer');
+console.log('Version: v95 - FIX: Øl & Vand tabel tom efter import + Status rapport + Bedre logging');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2490,29 +2490,65 @@ async function doImport(category = 'vin') {
     // Reload data - FORCE refresh fra backend
     console.log('🔄 Genindlæser varelager efter import...');
     if (category === 'ol-vand') {
+      // KRITISK: Vent lidt så backend kan gemme data
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       // KRITISK: Tjek om loadOlVand er defineret
       if (typeof loadOlVand === 'function') {
+        console.log('📥 Kalder loadOlVand()...');
         await loadOlVand();
+        console.log(`✅ loadOlVand() færdig. allOlVand har nu ${allOlVand ? allOlVand.length : 0} produkter`);
+        
+        // KRITISK: Opdater tabel og dashboard MED DET SAMME
         if (typeof renderOlVandLager === 'function') {
+          console.log('🎨 Renderer Øl & Vand tabel...');
           renderOlVandLager();
+          console.log('✅ Tabel renderet');
+        } else {
+          console.error('❌ renderOlVandLager er ikke defineret!');
         }
+        
         if (typeof updateDashboardOlVand === 'function') {
           updateDashboardOlVand();
+          console.log('✅ Dashboard opdateret');
+        }
+        
+        if (typeof populateFiltersOlVand === 'function') {
+          populateFiltersOlVand();
+          console.log('✅ Filtre opdateret');
         }
       } else {
         console.error('❌ loadOlVand er ikke defineret!');
         // Prøv at hente data direkte
         try {
+          console.log('📥 Henter data direkte...');
           const allProducts = await apiCall('/api/wines');
+          console.log(`📦 Modtaget ${allProducts ? allProducts.length : 0} produkter fra backend`);
+          
           const olVand = (allProducts || []).filter(p => {
             const kategori = (p.kategori || p.type || '').toLowerCase();
             const vinId = (p.vinId || '').toLowerCase();
             return vinId.startsWith('ol-') || /^w\d{4,}$/.test(vinId) ||
                    kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand');
           });
-          allOlVand = olVand;
-          if (typeof renderOlVandLager === 'function') renderOlVandLager();
-          if (typeof updateDashboardOlVand === 'function') updateDashboardOlVand();
+          
+          console.log(`✅ Filtreret til ${olVand.length} Øl & Vand produkter`);
+          allOlVand = olVand.map(p => {
+            p.antal = parseInt(p.antal) || 0;
+            p.minAntal = parseInt(p.minAntal) || 24;
+            return p;
+          });
+          
+          if (typeof renderOlVandLager === 'function') {
+            renderOlVandLager();
+            console.log('✅ Tabel renderet (direkte)');
+          }
+          if (typeof updateDashboardOlVand === 'function') {
+            updateDashboardOlVand();
+          }
+          if (typeof populateFiltersOlVand === 'function') {
+            populateFiltersOlVand();
+          }
         } catch (e) {
           console.error('❌ Fejl ved direkte hentning af Øl & Vand:', e);
         }
@@ -5263,6 +5299,12 @@ async function loadOlVand() {
     });
     
     console.log(`✅ Hentet ${allOlVand.length} Øl & Vand produkter`);
+    console.log('📋 Eksempel produkter:', allOlVand.slice(0, 3).map(p => ({
+      vinId: p.vinId,
+      navn: p.navn,
+      kategori: p.kategori,
+      antal: p.antal
+    })));
     
     // Gem backup
     await saveOlVandBackup(allOlVand);
@@ -5388,7 +5430,11 @@ function showOlVandOversigt(type) {
 
 // Render Øl & Vand lager tabel
 function renderOlVandLager() {
+  console.log('🎨 renderOlVandLager() kaldt');
+  console.log(`📊 allOlVand har ${allOlVand ? allOlVand.length : 0} produkter`);
+  
   if (!allOlVand || !Array.isArray(allOlVand)) {
+    console.warn('⚠️ allOlVand er ikke et array - initialiserer til tom array');
     allOlVand = [];
   }
   
@@ -5397,6 +5443,8 @@ function renderOlVandLager() {
     console.error('❌ ol-vand-lager-tbody element ikke fundet!');
     return;
   }
+  
+  console.log(`📋 Renderer ${allOlVand.length} produkter i tabel...`);
   
   const lokationFilter = document.getElementById('filter-lokation-ol-vand')?.value || '';
   const reolFilter = document.getElementById('filter-reol-ol-vand')?.value || '';
@@ -5415,6 +5463,14 @@ function renderOlVandLager() {
   }
   
   tbody.innerHTML = '';
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 20px; color: #999;">Ingen Øl & Vand produkter fundet. Importer data først.</td></tr>';
+    console.log('⚠️ Ingen produkter at vise');
+    return;
+  }
+  
+  console.log(`✅ Renderer ${filtered.length} produkter...`);
   
   filtered.forEach(p => {
     const antal = parseInt(p.antal) || 0;
@@ -5448,6 +5504,8 @@ function renderOlVandLager() {
     `;
     tbody.appendChild(row);
   });
+  
+  console.log(`✅ Tabel opdateret med ${filtered.length} rækker`);
 }
 
 // Populate filters for Øl & Vand
