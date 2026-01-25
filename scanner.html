@@ -264,23 +264,39 @@
 
     // START SCANNER - VENT PÅ LOKATIONER
     function startQRScannerWhenReady() {
-      // Vent på at lokationer er hentet
-      if (!locationsLoaded) {
-        console.log('⏳ Venter på at lokationer er hentet...');
-        setTimeout(() => startQRScannerWhenReady(), 500);
-        return;
+      // Vent maksimalt 5 sekunder på lokationer
+      let waitCount = 0;
+      const maxWait = 10; // 10 * 500ms = 5 sekunder
+      
+      function checkAndStart() {
+        waitCount++;
+        
+        // Hvis lokationer ikke er hentet efter 5 sekunder, fortsæt alligevel
+        if (!locationsLoaded && waitCount < maxWait) {
+          console.log(`⏳ Venter på lokationer... (${waitCount}/${maxWait})`);
+          setTimeout(checkAndStart, 500);
+          return;
+        }
+        
+        // Hvis jsQR ikke er indlæst, vent lidt mere
+        if (typeof jsQR === 'undefined') {
+          if (waitCount < maxWait * 2) {
+            console.log(`⏳ Venter på jsQR bibliotek... (${waitCount}/${maxWait * 2})`);
+            setTimeout(checkAndStart, 500);
+            return;
+          } else {
+            console.error('❌ jsQR bibliotek ikke indlæst efter lang ventetid');
+            alert('Scanner bibliotek ikke indlæst. Genindlæs siden.');
+            return;
+          }
+        }
+        
+        // Nu kan vi starte scanneren
+        console.log('✅ Starter scanner - lokationer og bibliotek er klar');
+        startQRScanner();
       }
       
-      // Vent også på at jsQR biblioteket er indlæst
-      if (typeof jsQR === 'undefined') {
-        console.log('⏳ Venter på jsQR bibliotek...');
-        setTimeout(() => startQRScannerWhenReady(), 500);
-        return;
-      }
-      
-      // Nu kan vi starte scanneren
-      console.log('✅ Starter scanner - lokationer og bibliotek er klar');
-      startQRScanner();
+      checkAndStart();
     }
     
     // START SCANNER
@@ -308,15 +324,27 @@
         qrScanning = true;
         
         video.onloadedmetadata = () => {
-          video.play();
-          console.log('✅ Kamera startet');
+          console.log('✅ Kamera metadata indlæst');
+          video.play().then(() => {
+            console.log('✅ Video afspiller');
+          }).catch(err => {
+            console.error('❌ Fejl ved afspilning af video:', err);
+          });
         };
-        video.play();
         
-        // Vent lidt før vi starter scanning (undgå falske QR-koder fra støj)
+        // Prøv at afspille med det samme
+        video.play().then(() => {
+          console.log('✅ Video afspiller');
+        }).catch(err => {
+          console.error('❌ Fejl ved afspilning af video:', err);
+        });
+        
+        // Start scanning efter kort ventetid - scanFrame håndterer debounce
         setTimeout(() => {
-          scanFrame();
-        }, 1000); // Vent 1 sekund efter kamera starter
+          if (qrScanning && video && video.srcObject) {
+            scanFrame();
+          }
+        }, 500);
         
       } catch (error) {
         qrScanning = false;
