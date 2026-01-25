@@ -483,16 +483,12 @@
             lastScannedCode = codeData;
             lastScanTime = now;
             console.log('📷 QR-kode scannet:', codeData);
+            
+            // Behandle scan, men fortsæt scanning
             handleScan(codeData);
             
-            // Stop scanning kortvarigt for at undgå gentagne scans
-            qrScanning = false;
-            setTimeout(() => {
-              if (video && video.srcObject) {
-                qrScanning = true;
-                scanFrame();
-              }
-            }, 2000); // Vent 2 sekunder før vi scanner igen
+            // Fortsæt scanning - ikke stop
+            scanAnimationFrame = requestAnimationFrame(scanFrame);
             return;
           }
         }

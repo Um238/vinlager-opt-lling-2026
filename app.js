@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v75
+// VINLAGER OPTÆLLING 2026 - APP.JS v76
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v75 - KRITISK FIX: Scanning gemmer korrekt, antal opdateres, rapporter viser korrekt data');
+console.log('Version: v76 - KRITISK FIX: Scanner virker, rapporter gemmes i localStorage, rapporter forsvinder ikke');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2127,56 +2127,75 @@ function showReportsPage() {
 // Indlæs rapport historik
 async function loadReportsHistory() {
   try {
-    // ALTID hent fra backend først (så vi får rapporter fra mobil)
+    console.log('🔄 Henter rapporter fra backend...');
+    
+    // KRITISK: Hent FØRST fra localStorage (sikker backup)
+    const saved = localStorage.getItem('reportsHistory');
+    let localReports = [];
+    if (saved) {
+      try {
+        localReports = JSON.parse(saved);
+        console.log(`📦 Fundet ${localReports.length} rapporter i localStorage backup`);
+      } catch (e) {
+        console.warn('⚠️ Fejl ved parsing af localStorage:', e);
+        localReports = [];
+      }
+    }
+    
+    // Prøv at hente fra backend
+    let backendReports = [];
     try {
-      const backendReports = await apiCall('/api/reports/history');
+      backendReports = await apiCall('/api/reports/history');
+      console.log(`📦 Hentet ${backendReports ? backendReports.length : 0} rapporter fra backend`);
+    } catch (error) {
+      console.warn('⚠️ Kunne ikke hente rapporter fra backend, bruger localStorage:', error.message);
+      backendReports = [];
+    }
+    
+    if (backendReports && Array.isArray(backendReports) && backendReports.length > 0) {
+      // Backend har rapporter - merge med localStorage
+      const backendIds = new Set(backendReports.map(r => (r.id || r.reportId || r.report_id || '').toString()));
+      const uniqueLocalReports = localReports.filter(r => {
+        const localId = (r.id || '').toString();
+        return localId && !backendIds.has(localId);
+      });
       
-      if (backendReports && Array.isArray(backendReports) && backendReports.length > 0) {
-        // Brug backend data - dette sikrer at rapporter fra mobil også vises
-        reportsHistory = backendReports.map(r => ({
-          id: r.id || r.reportId || r.report_id,
+      console.log(`📊 Merging: ${backendReports.length} fra backend + ${uniqueLocalReports.length} unikke fra localStorage`);
+      
+      reportsHistory = [
+        ...backendReports.map(r => ({
+          id: (r.id || r.reportId || r.report_id || '').toString(),
           date: r.date || r.created || r.created_at,
-          name: r.name || r.report_name,
+          name: r.name || r.report_name || 'Ukendt rapport',
           type: r.type || r.report_type || 'lager',
-          wineCount: r.wineCount || r.wine_count || r.wineCount || 0,
-          totalValue: r.totalValue || r.total_value || r.totalValue || 0,
+          wineCount: r.wineCount || r.wine_count || 0,
+          totalValue: r.totalValue || r.total_value || 0,
           location: r.location || 'Mobil Optælling',
           archived: r.archived === 1 || r.archived === true || false
-        }));
-        // Sorter efter dato (nyeste først)
-        reportsHistory.sort((a, b) => {
-          const dateA = new Date(a.date || 0);
-          const dateB = new Date(b.date || 0);
-          return dateB - dateA;
-        });
-        // Gem også i localStorage som backup
-        localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
-      } else {
-        // Backend tom eller ingen rapporter – brug localStorage backup i stedet for at overskrive
-        const saved = localStorage.getItem('reportsHistory');
-        if (saved) {
-          try {
-            reportsHistory = JSON.parse(saved);
-          } catch (e) {
-            reportsHistory = [];
-          }
-        } else {
-          reportsHistory = [];
-        }
-      }
-    } catch (backendError) {
-      // 404 eller anden fejl - brug localStorage backup stille
-      const saved = localStorage.getItem('reportsHistory');
-      if (saved) {
-        try {
-          reportsHistory = JSON.parse(saved);
-        } catch (parseError) {
-          reportsHistory = [];
-        }
+        })),
+        ...uniqueLocalReports
+      ];
+      
+      // Sorter efter dato (nyeste først)
+      reportsHistory.sort((a, b) => {
+        const dateA = new Date(a.date || 0);
+        const dateB = new Date(b.date || 0);
+        return dateB - dateA;
+      });
+      
+      // KRITISK: Gem ALTID i localStorage som backup (selv hvis backend har data)
+      localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+      console.log(`✅ Gemt ${reportsHistory.length} rapporter i localStorage backup`);
+    } else {
+      // Backend tom eller ingen rapporter – brug localStorage backup
+      console.log('⚠️ Backend tom - bruger localStorage backup');
+      if (localReports.length > 0) {
+        reportsHistory = localReports;
+        console.log(`✅ Gendannet ${reportsHistory.length} rapporter fra localStorage backup`);
       } else {
         reportsHistory = [];
+        console.log('⚠️ Ingen rapporter i backup');
       }
-      // FJERNET: Stop med at hente hele tiden
     }
     
     // KRITISK: ALTID opdater tabel uanset hvad
@@ -2192,12 +2211,13 @@ async function loadReportsHistory() {
       showBackupStatus();
     }
   } catch (error) {
-    console.error('Fejl ved indlæsning af rapport historik:', error);
+    console.error('❌ Fejl ved indlæsning af rapport historik:', error);
     // Prøv at bruge localStorage som sidste fallback
     const saved = localStorage.getItem('reportsHistory');
     if (saved) {
       try {
         reportsHistory = JSON.parse(saved);
+        console.log(`✅ Gendannet ${reportsHistory.length} rapporter fra localStorage efter fejl`);
         if (typeof updateLocationFilter === 'function') {
           updateLocationFilter();
         }
@@ -2205,8 +2225,12 @@ async function loadReportsHistory() {
           renderReportsTable();
         }
       } catch (parseError) {
-        console.error('Fejl ved parsing af localStorage:', parseError);
+        console.error('❌ Fejl ved parsing af localStorage:', parseError);
+        reportsHistory = [];
       }
+    } else {
+      reportsHistory = [];
+      console.log('⚠️ Ingen rapporter i backup efter fejl');
     }
   }
 }
@@ -2640,15 +2664,22 @@ async function generateFullReportPDF(report) {
     
     // Hent vine-data fra backend (samme som mobil scanneren gjorde)
     console.log('🔍 Henter opdateret vine-data fra backend...');
-    const wines = await apiCall('/api/reports/lager');
-    console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
-    if (wines && wines.length > 0) {
-      console.log('📊 Første vin i data:', wines[0]);
+    let wines = [];
+    try {
+      wines = await apiCall('/api/reports/lager');
+      console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
+      if (wines && wines.length > 0) {
+        console.log('📊 Første vin i data:', wines[0]);
+      }
+    } catch (error) {
+      console.error('❌ Fejl ved hentning af vine-data:', error);
+      alert(`Fejl ved hentning af data: ${error.message}`);
+      return;
     }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
       console.warn('⚠️ Ingen vine-data fundet!');
-      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine.');
+      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine. Prøv at importere data først.');
       return;
     }
     
@@ -3195,13 +3226,25 @@ async function unarchiveReport(reportId) {
 // Generer lav status rapport (gem i tabellen uden at vise/download)
 async function generateLavStatusRapport() {
   try {
+    console.log('📊 Genererer lav status rapport...');
     const wines = await apiCall('/api/reports/lager');
+    console.log('📦 Hentet vine fra backend:', wines ? wines.length : 0);
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      console.warn('⚠️ Ingen vine fundet i backend');
+      showError('Ingen vine fundet. Tjek om lageret indeholder data.');
+      return;
+    }
     
     // Beregn total værdi
     let totalVærdi = 0;
     wines.forEach(w => {
-      totalVærdi += (w.antal || 0) * (w.indkøbspris || 0);
+      const antal = parseInt(w.antal) || 0;
+      const pris = parseFloat(w.indkøbspris) || 0;
+      totalVærdi += antal * pris;
     });
+    
+    console.log(`💰 Total værdi: ${totalVærdi}`);
     
     const dateStr = toLocalDateTimeString();
     
@@ -3216,18 +3259,9 @@ async function generateLavStatusRapport() {
       archived: false
     };
     
-    // Gem i backend
-    try {
-      await apiCall('/api/reports/save', {
-        method: 'POST',
-        body: JSON.stringify(report)
-      });
-      console.log('✅ Rapport gemt i backend');
-    } catch (error) {
-      console.error('Fejl ved gemning i backend:', error);
-    }
+    console.log('💾 Gemmer rapport:', report);
     
-    // Gem også i localStorage som backup
+    // KRITISK: Gem ALTID i localStorage FØRST (sikker backup)
     const reportForLocalStorage = {
       id: report.reportId,
       date: dateStr,
@@ -3239,19 +3273,39 @@ async function generateLavStatusRapport() {
       archived: report.archived
     };
     
+    // Tilføj til lokal historik FØRST
+    if (!Array.isArray(reportsHistory)) {
+      reportsHistory = [];
+    }
     reportsHistory.unshift(reportForLocalStorage);
-    if (reportsHistory.length > 100) {
-      reportsHistory = reportsHistory.slice(0, 100);
+    if (reportsHistory.length > 200) { // Øget til 200 for bedre backup
+      reportsHistory = reportsHistory.slice(0, 200);
     }
     
+    // Gem i localStorage FØRST
     localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+    console.log('✅ Rapport gemt i localStorage backup');
+    
+    // Prøv at gemme i backend (men fortsæt selv hvis det fejler)
+    try {
+      await apiCall('/api/reports/save', {
+        method: 'POST',
+        body: JSON.stringify(report)
+      });
+      console.log('✅ Rapport gemt i backend');
+    } catch (error) {
+      console.error('⚠️ Fejl ved gemning i backend (fortsætter alligevel):', error);
+      // Fortsæt alligevel - vi har gemt i localStorage
+    }
+    
+    // Opdater UI
     showBackupStatus();
     updateLocationFilter();
     renderReportsTable();
     
-    showSuccess('Rapport genereret og tilføjet til historik!');
+    showSuccess(`Rapport genereret! ${wines.length} vine, ${formatDanskPris(totalVærdi)} kr.`);
   } catch (error) {
-    console.error('Fejl ved generering af rapport:', error);
+    console.error('❌ Fejl ved generering af rapport:', error);
     showError('Kunne ikke generere rapport: ' + error.message);
   }
 }
