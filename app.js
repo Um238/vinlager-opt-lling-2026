@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v76
+// VINLAGER OPTÆLLING 2026 - APP.JS v77
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v76 - KRITISK FIX: Scanner virker, rapporter gemmes i localStorage, rapporter forsvinder ikke');
+console.log('Version: v77 - FIX: generateLavStatusRapport virker nu med bedre fejlhåndtering');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -3227,12 +3227,37 @@ async function unarchiveReport(reportId) {
 async function generateLavStatusRapport() {
   try {
     console.log('📊 Genererer lav status rapport...');
-    const wines = await apiCall('/api/reports/lager');
-    console.log('📦 Hentet vine fra backend:', wines ? wines.length : 0);
+    
+    // Vis besked om at rapport genereres
+    if (typeof showSuccess === 'function') {
+      showSuccess('Genererer rapport...');
+    } else {
+      alert('Genererer rapport...');
+    }
+    
+    let wines = [];
+    try {
+      wines = await apiCall('/api/reports/lager');
+      console.log('📦 Hentet vine fra backend:', wines ? wines.length : 0);
+    } catch (apiError) {
+      console.error('❌ Fejl ved hentning af vine:', apiError);
+      const errorMsg = apiError.message || 'Kunne ikke hente data fra server';
+      if (typeof showError === 'function') {
+        showError(`Fejl: ${errorMsg}. Tjek console for detaljer.`);
+      } else {
+        alert(`FEJL: ${errorMsg}`);
+      }
+      return;
+    }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
       console.warn('⚠️ Ingen vine fundet i backend');
-      showError('Ingen vine fundet. Tjek om lageret indeholder data.');
+      const msg = 'Ingen vine fundet. Tjek om lageret indeholder data. Prøv at importere data først.';
+      if (typeof showError === 'function') {
+        showError(msg);
+      } else {
+        alert(msg);
+      }
       return;
     }
     
@@ -3283,8 +3308,13 @@ async function generateLavStatusRapport() {
     }
     
     // Gem i localStorage FØRST
-    localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
-    console.log('✅ Rapport gemt i localStorage backup');
+    try {
+      localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+      console.log('✅ Rapport gemt i localStorage backup');
+    } catch (storageError) {
+      console.error('❌ Fejl ved gemning i localStorage:', storageError);
+      // Fortsæt alligevel
+    }
     
     // Prøv at gemme i backend (men fortsæt selv hvis det fejler)
     try {
@@ -3299,14 +3329,36 @@ async function generateLavStatusRapport() {
     }
     
     // Opdater UI
-    showBackupStatus();
-    updateLocationFilter();
-    renderReportsTable();
+    try {
+      if (typeof showBackupStatus === 'function') {
+        showBackupStatus();
+      }
+      if (typeof updateLocationFilter === 'function') {
+        updateLocationFilter();
+      }
+      if (typeof renderReportsTable === 'function') {
+        renderReportsTable();
+      }
+    } catch (uiError) {
+      console.error('⚠️ Fejl ved opdatering af UI:', uiError);
+      // Fortsæt alligevel
+    }
     
-    showSuccess(`Rapport genereret! ${wines.length} vine, ${formatDanskPris(totalVærdi)} kr.`);
+    const successMsg = `Rapport genereret! ${wines.length} vine, ${formatDanskPris(totalVærdi)} kr.`;
+    console.log('✅', successMsg);
+    if (typeof showSuccess === 'function') {
+      showSuccess(successMsg);
+    } else {
+      alert(successMsg);
+    }
   } catch (error) {
     console.error('❌ Fejl ved generering af rapport:', error);
-    showError('Kunne ikke generere rapport: ' + error.message);
+    const errorMsg = 'Kunne ikke generere rapport: ' + (error.message || 'Ukendt fejl');
+    if (typeof showError === 'function') {
+      showError(errorMsg);
+    } else {
+      alert('FEJL: ' + errorMsg);
+    }
   }
 }
 
