@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v101 - SIMPLIFICERET: Import funktion tilbage til simpel version');
+console.log('Version: v102 - FIX: Labels side om side + QR koder for Øl & Vand + Status rapport export');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2733,7 +2733,9 @@ async function generateLabels(category = 'vin') {
     const wine = item; // For kompatibilitet
     const label = document.createElement('div');
     label.className = 'label';
-    const qrId = `qr-${wine.vinId}-${index}-${Date.now()}`;
+    // KRITISK: Brug vinId eller varenummer for QR kode
+    const qrCodeValue = wine.vinId || wine.varenummer || `OL-${index}`;
+    const qrId = `qr-${qrCodeValue}-${index}-${Date.now()}`;
     const displayInfo = category === 'ol-vand' 
       ? `<div>${wine.kategori || wine.type || ''} ${wine.størrelse || ''}</div>`
       : `<div>${wine.land || ''} ${wine.årgang || ''}</div>`;
@@ -2749,10 +2751,13 @@ async function generateLabels(category = 'vin') {
     `;
     container.appendChild(label);
 
-    // Generer QR kode (bruger vinId til QR scanning) - vent lidt så DOM er klar
+    // Generer QR kode (bruger vinId eller varenummer til QR scanning) - vent lidt så DOM er klar
     setTimeout(() => {
       const qrDiv = document.getElementById(qrId);
-      if (!qrDiv) return;
+      if (!qrDiv) {
+        console.warn(`QR div ${qrId} ikke fundet`);
+        return;
+      }
       
       // Prøv qrcodejs først (QRCode constructor)
       if (typeof QRCode !== 'undefined' && QRCode.prototype) {
@@ -2760,7 +2765,7 @@ async function generateLabels(category = 'vin') {
         qrDiv.innerHTML = '';
         try {
           new QRCode(qrDiv, {
-            text: wine.vinId,
+            text: qrCodeValue,
             width: 100,
             height: 100,
             colorDark: '#000000',
@@ -2778,7 +2783,7 @@ async function generateLabels(category = 'vin') {
       
       if (QRCodeLib && typeof QRCodeLib.toDataURL === 'function') {
         // Prøv med toDataURL først
-        QRCodeLib.toDataURL(wine.vinId, {
+        QRCodeLib.toDataURL(qrCodeValue, {
           width: 100,
           margin: 2,
           color: {
@@ -2789,7 +2794,7 @@ async function generateLabels(category = 'vin') {
           if (err) {
             console.error('QR toDataURL fejl:', err);
             // Prøv med canvas
-            tryCanvasGeneration(qrDiv, wine.vinId, QRCodeLib);
+            tryCanvasGeneration(qrDiv, qrCodeValue, QRCodeLib);
           } else {
             // Brug data URL til at oprette img
             const img = document.createElement('img');
@@ -2804,7 +2809,7 @@ async function generateLabels(category = 'vin') {
         });
       } else if (typeof QRCodeLib.toCanvas === 'function') {
         // Prøv direkte med canvas
-        tryCanvasGeneration(qrDiv, wine.vinId, QRCodeLib);
+        tryCanvasGeneration(qrDiv, qrCodeValue, QRCodeLib);
       } else {
         console.warn('QRCode bibliotek ikke fundet. Tjekket:', {
           QRCode: typeof QRCode,
@@ -2812,7 +2817,7 @@ async function generateLabels(category = 'vin') {
           qrcode: typeof qrcode,
           'QRCode.prototype': typeof QRCode !== 'undefined' ? typeof QRCode.prototype : 'undefined'
         });
-        qrDiv.innerHTML = `<div style="padding: 10px; border: 1px solid #000; text-align: center; font-size: 0.8em;">VIN-ID: ${wine.vinId}</div>`;
+        qrDiv.innerHTML = `<div style="padding: 10px; border: 1px solid #000; text-align: center; font-size: 0.8em;">${category === 'ol-vand' ? 'Varenr' : 'VIN-ID'}: ${qrCodeValue}</div>`;
       }
     }, index * 50); // Lidt delay for hver label
   });
@@ -5890,6 +5895,7 @@ async function generateLavStatusRapportOlVand() {
   window.importFile = doImport;
   window.generateLabels = generateLabels;
   window.printLabels = printLabels;
+  window.generateLavStatusRapportOlVand = generateLavStatusRapportOlVand;
   window.generateLagerReport = generateLagerReport;
   window.generateVærdiReport = generateVærdiReport;
   window.applyFilter = applyFilter;
