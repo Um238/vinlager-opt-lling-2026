@@ -795,4 +795,9 @@ tr:hover {
   .filter-bar select {
     width: 100%;
   }
+  
+  /* Import grid - stack på små skærme */
+  .import-grid {
+    grid-template-columns: 1fr !important;
+  }
 }

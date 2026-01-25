@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v91
+// VINLAGER OPTÆLLING 2026 - APP.JS v92
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v91 - FIX: Import side-om-side layout + JavaScript fejl fix + Backend kategori support');
+console.log('Version: v92 - FIX: Øl & Vand Excel skabelon med alle kolonner + realistiske priser og lokationer');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2176,35 +2176,138 @@ async function downloadOlVandTemplate() {
       { navn: 'Ginger Ale – 25 cl', kategori: 'Sodavand', type: 'Ginger Ale', størrelse: '25 cl' }
     ];
     
+    // Lokationer for Øl & Vand
+    const lokationer = ['Restaurant 1', 'Restaurant 2', 'Køleren Øl & vand 1', 'Køleren Øl & vand 2', 'Bar 1', 'Bar 2'];
+    
+    // Realistiske indkøbspriser for Øl & Vand (i kr.)
+    const getPris = (produkt) => {
+      const navn = produkt.navn.toLowerCase();
+      const størrelse = produkt.størrelse || '';
+      
+      // Fadøl priser (20-50L)
+      if (produkt.kategori === 'Fadøl') {
+        if (størrelse.includes('20 L')) return '450.00'; // 20L fadøl
+        if (størrelse.includes('25 L')) return '550.00'; // 25L fadøl
+        if (størrelse.includes('30 L')) return '650.00'; // 30L fadøl
+        if (størrelse.includes('50 L')) return '950.00'; // 50L fadøl
+        return '500.00'; // Default fadøl
+      }
+      
+      // Flaske- & Dåseøl priser (33-50cl)
+      if (produkt.kategori === 'Flaske- & Dåseøl') {
+        if (størrelse.includes('33 cl')) return '8.50'; // 33cl flaske
+        if (størrelse.includes('44 cl')) return '10.00'; // 44cl flaske
+        if (størrelse.includes('50 cl')) return '12.00'; // 50cl flaske
+        return '9.00'; // Default flaske
+      }
+      
+      // Vand – Uden brus (25cl-1L)
+      if (produkt.kategori === 'Vand – Uden brus') {
+        if (størrelse.includes('25 cl')) return '3.50';
+        if (størrelse.includes('50 cl')) return '5.00';
+        if (størrelse.includes('75 cl')) return '6.50';
+        if (størrelse.includes('1,0 L') || størrelse.includes('1.0 L')) return '8.00';
+        return '5.00';
+      }
+      
+      // Vand – Med brus (25cl-1L)
+      if (produkt.kategori === 'Vand – Med brus') {
+        if (størrelse.includes('25 cl')) return '4.00';
+        if (størrelse.includes('50 cl')) return '5.50';
+        if (størrelse.includes('75 cl')) return '7.00';
+        if (størrelse.includes('1,0 L') || størrelse.includes('1.0 L')) return '9.00';
+        return '5.50';
+      }
+      
+      // Sodavand (20-33cl)
+      if (produkt.kategori === 'Sodavand') {
+        if (størrelse.includes('20 cl')) return '4.50';
+        if (størrelse.includes('25 cl')) return '5.00';
+        if (størrelse.includes('33 cl')) return '6.00';
+        return '5.00';
+      }
+      
+      return '5.00'; // Default pris
+    };
+    
     // Generer CSV indhold
     const headers = ['VIN-ID', 'Varenummer', 'Navn', 'Kategori', 'Type', 'Størrelse', 'Lokation', 'Reol', 'Hylde', 'Antal', 'Min. Antal', 'Indkøbspris'];
-    const rows = produkter.map((p, index) => {
+    const rows = [];
+    
+    // Fordel produkter på forskellige lokationer med realistiske data
+    produkter.forEach((p, index) => {
       const vinId = `OL-${String(index + 1).padStart(4, '0')}`;
       const varenummer = `W${String(index + 1000).padStart(4, '0')}`;
-      return [
+      
+      // Vælg lokation (fordel jævnt)
+      const lokation = lokationer[index % lokationer.length];
+      
+      // Generer reol (A, B, C, D, E, F)
+      const reol = String.fromCharCode(65 + (index % 6)); // A-F
+      
+      // Generer hylde (1-4)
+      const hylde = (index % 4) + 1; // 1-4
+      
+      // Generer antal (24-72 stk)
+      const antal = 24 + Math.floor(Math.random() * 48); // 24-72
+      
+      // Hent pris
+      const pris = getPris(p);
+      
+      rows.push([
         vinId,
         varenummer,
         p.navn,
         p.kategori,
         p.type,
         p.størrelse,
-        '', // Lokation - tom så brugeren kan udfylde
-        '', // Reol - tom
-        '', // Hylde - tom
-        '0', // Antal
+        lokation,
+        reol,
+        hylde.toString(),
+        antal.toString(),
         '24', // Min. Antal
-        '0.00' // Indkøbspris
-      ];
+        pris.replace('.', ',') // Dansk format (komma)
+      ]);
+      
+      // Nogle produkter skal have flere lokationer (ca. 20%)
+      if (Math.random() < 0.2 && index < produkter.length - 5) {
+        const secondLokation = lokationer[(index + 3) % lokationer.length];
+        const secondReol = String.fromCharCode(65 + ((index + 2) % 6));
+        const secondHylde = ((index + 1) % 4) + 1;
+        const secondAntal = 24 + Math.floor(Math.random() * 24);
+        
+        rows.push([
+          vinId, // Samme VIN-ID
+          varenummer, // Samme varenummer
+          p.navn,
+          p.kategori,
+          p.type,
+          p.størrelse,
+          secondLokation,
+          secondReol,
+          secondHylde.toString(),
+          secondAntal.toString(),
+          '24',
+          pris.replace('.', ',')
+        ]);
+      }
     });
     
-    // Konverter til CSV format
+    // Konverter til CSV format (med semikolon separator for Excel kompatibilitet)
     const csvContent = [
       headers.join(';'),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+      ...rows.map(row => row.map(cell => {
+        const cellValue = String(cell || '');
+        // Hvis cellen indeholder semikolon, komma eller anførselstegn, wrap i anførselstegn
+        if (cellValue.includes(';') || cellValue.includes(',') || cellValue.includes('"')) {
+          return `"${cellValue.replace(/"/g, '""')}"`;
+        }
+        return cellValue;
+      }).join(';'))
     ].join('\r\n');
     
-    // Opret Excel fil (bruger CSV format med .xlsx extension - backend kan håndtere det)
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8' });
+    // Opret CSV fil med UTF-8 BOM for korrekt encoding i Excel
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
