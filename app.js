@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v83
+// VINLAGER OPTÆLLING 2026 - APP.JS v86
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v83 - KRITISK FIX: generateLavStatusRapport bruger allWines direkte (ikke backend)');
+console.log('Version: v86 - 100% DATA SIKKERHED: Multi-layer backup (localStorage + IndexedDB + sessionStorage) + Auto-restore til backend');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -135,8 +135,11 @@ if (typeof window !== 'undefined') {
 }
 
 // Initialiser app
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM loaded, initialiserer app...');
+  
+  // KRITISK: Initialiser IndexedDB backup med det samme
+  await initIndexedDB();
   
   // Vent lidt så alle scripts er indlæst
   setTimeout(() => {
@@ -557,30 +560,14 @@ function saveWinesBackup(wines) {
   }
 }
 
-function restoreWinesFromBackup() {
-  try {
-    const saved = localStorage.getItem(WINES_BACKUP_KEY);
-    if (saved) {
-      const wines = JSON.parse(saved);
-      if (wines && Array.isArray(wines) && wines.length > 0) {
-        allWines = wines;
-        updateDashboard();
-        populateFilters();
-        renderLager();
-        if (document.getElementById('scan-input')) setupScanInput();
-        showBackupStatus();
-        console.log('✅ Lager gendannet fra backup:', wines.length, 'vine');
-        return wines.length;
-      }
-    }
-  } catch (e) {
-    console.warn('Kunne ikke gendanne lager fra backup:', e);
-  }
-  return 0;
+// Denne funktion er nu erstattet af async versionen nedenfor
+// Beholdes for bagudkompatibilitet
+async function restoreWinesFromBackup() {
+  return await restoreWinesFromBackupAsync();
 }
 
-function gendanLagerFraBackup() {
-  const n = restoreWinesFromBackup();
+async function gendanLagerFraBackup() {
+  const n = await restoreWinesFromBackup();
   const msg = document.getElementById('backup-actions-msg');
   if (msg) {
     if (n > 0) {
@@ -698,7 +685,7 @@ async function loadWines() {
         saveWinesBackup(allWines); // Sikr backup er opdateret
       } else {
         // Ingen data - prøv backup
-        const n = restoreWinesFromBackup();
+        const n = await restoreWinesFromBackup();
         if (n > 0) {
           console.log(`✅ Lager tomt på backend. Gendannet ${n} vine fra backup.`);
         } else {
@@ -712,7 +699,7 @@ async function loadWines() {
         saveWinesBackup(allWines);
         console.log(`✅ Beholder ${allWines.length} eksisterende vine.`);
       } else {
-        const n = restoreWinesFromBackup();
+        const n = await restoreWinesFromBackup();
         if (n > 0) {
           console.log(`✅ Gendannet ${n} vine fra backup.`);
         }
@@ -770,10 +757,10 @@ async function loadWines() {
     if (allWines && allWines.length > 0) {
       // BEHOLD eksisterende data - ikke overskriv med tom array!
       console.warn(`⚠️ API fejl, men beholder ${allWines.length} eksisterende vine.`);
-      saveWinesBackup(allWines);
+      await saveWinesBackup(allWines);
     } else {
       // Kun hvis vi ikke har noget, prøv backup
-      const n = restoreWinesFromBackup();
+      const n = await restoreWinesFromBackup();
       if (n > 0) {
         console.log(`✅ Gendannet ${n} vine fra backup efter fejl.`);
       } else {
