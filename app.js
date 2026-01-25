@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v98 - FIX: authObj duplikeret deklaration + Login funktionalitet');
+console.log('Version: v99 - FIX: generateLabels funktionshoved mangler + Syntax fejl');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2689,7 +2689,49 @@ function tryCanvasGeneration(container, text, qrLib) {
   }
 }
 
-// DENNE FUNKTION ER FLYTTET TIL LINJE 2692 - SE DEN NYE VERSION MED category PARAMETER
+// Generate labels function med category parameter
+async function generateLabels(category = 'vin') {
+  console.log(`🎨 Genererer labels for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'}...`);
+  
+  // KRITISK: Brug korrekte element IDs baseret på kategori
+  const lokationId = category === 'ol-vand' ? 'label-lokation-ol-vand' : 'label-lokation';
+  const reolId = category === 'ol-vand' ? 'label-reol-ol-vand' : 'label-reol';
+  const hyldeId = category === 'ol-vand' ? 'label-hylde-ol-vand' : 'label-hylde';
+  const containerId = category === 'ol-vand' ? 'labels-container-ol-vand' : 'labels-container';
+  
+  const lokationFilter = document.getElementById(lokationId)?.value || '';
+  const reolFilter = document.getElementById(reolId)?.value || '';
+  const hyldeFilter = document.getElementById(hyldeId)?.value || '';
+
+  // KRITISK: Brug korrekt data array baseret på kategori
+  let filtered = category === 'ol-vand' ? (allOlVand || []) : (allWines || []);
+  
+  console.log(`📦 Starter med ${filtered.length} produkter (${category})`);
+
+  if (lokationFilter) {
+    filtered = filtered.filter(w => w.lokation === lokationFilter);
+  }
+  if (reolFilter) {
+    filtered = filtered.filter(w => w.reol === reolFilter);
+  }
+  if (hyldeFilter) {
+    filtered = filtered.filter(w => w.hylde === hyldeFilter);
+  }
+  
+  console.log(`✅ Filtreret til ${filtered.length} produkter`);
+
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.error(`❌ Container ${containerId} ikke fundet!`);
+    alert(`Fejl: Container for ${category === 'ol-vand' ? 'Øl & Vand' : 'Vin'} labels ikke fundet.`);
+    return;
+  }
+  container.innerHTML = '';
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p style="padding: 20px; text-align: center; color: #999;">Ingen produkter fundet med de valgte filtre.</p>';
+    return;
+  }
 
   filtered.forEach((item, index) => {
     const wine = item; // For kompatibilitet
