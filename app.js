@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v90
+// VINLAGER OPTÆLLING 2026 - APP.JS v91
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v90 - FIX: Kategori separation (Vin/Øl&Vand adskilt) + Status rapport Øl&Vand + Scanner support + Import fix');
+console.log('Version: v91 - FIX: Import side-om-side layout + JavaScript fejl fix + Backend kategori support');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2251,11 +2251,22 @@ async function doImport(category = 'vin') {
   const resultsDivId = category === 'ol-vand' ? 'import-results-ol-vand' : 'import-results-vin';
   const resultsContentId = category === 'ol-vand' ? 'import-results-content-ol-vand' : 'import-results-content-vin';
   const resultsDiv = document.getElementById(resultsDivId);
+  const contentDiv = document.getElementById(resultsContentId);
+  
+  // KRITISK FIX: Tjek om elementerne eksisterer før vi prøver at ændre style
   if (resultsDiv) {
     resultsDiv.style.display = 'block';
-    const contentDiv = document.getElementById(resultsContentId);
-    if (contentDiv) {
-      contentDiv.innerHTML = '<p>Importerer... Vent venligst.</p>';
+  }
+  if (contentDiv) {
+    contentDiv.innerHTML = '<p>Importerer... Vent venligst.</p>';
+  } else {
+    console.warn(`⚠️ Element ${resultsContentId} ikke fundet - opretter det...`);
+    // Opret element hvis det mangler
+    if (resultsDiv) {
+      const newContentDiv = document.createElement('div');
+      newContentDiv.id = resultsContentId;
+      resultsDiv.appendChild(newContentDiv);
+      newContentDiv.innerHTML = '<p>Importerer... Vent venligst.</p>';
     }
   }
   
@@ -2302,10 +2313,23 @@ async function doImport(category = 'vin') {
     console.log('✅ Varelager genindlæst');
   } catch (error) {
     const resultsDiv = document.getElementById(resultsDivId);
-    const resultsContent = document.getElementById(resultsContentId);
-    if (resultsDiv && resultsContent) {
+    let resultsContent = document.getElementById(resultsContentId);
+    
+    // KRITISK FIX: Opret element hvis det mangler
+    if (!resultsContent && resultsDiv) {
+      resultsContent = document.createElement('div');
+      resultsContent.id = resultsContentId;
+      resultsDiv.appendChild(resultsContent);
+    }
+    
+    if (resultsDiv) {
       resultsDiv.style.display = 'block';
+    }
+    if (resultsContent) {
       resultsContent.innerHTML = `<div class="error-message">Fejl: ${error.message}</div>`;
+    } else {
+      // Fallback hvis intet virker
+      alert(`Import fejl: ${error.message}`);
     }
   }
 }
