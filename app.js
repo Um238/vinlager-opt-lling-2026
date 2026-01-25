@@ -1,9 +1,9 @@
 // ============================================
-// VINLAGER OPTÆLLING 2026 - APP.JS v82
+// VINLAGER OPTÆLLING 2026 - APP.JS v83
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v82 - KRITISK FIX: generateLavStatusRapport bruger allWines direkte, scanner har fallback lokationer');
+console.log('Version: v83 - KRITISK FIX: generateLavStatusRapport bruger allWines direkte (ikke backend)');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -2747,23 +2747,26 @@ async function generateFullReportPDF(report) {
     console.log('📄 Genererer fuld PDF for rapport:', report);
     
     // Hent vine-data fra backend (samme som mobil scanneren gjorde)
-    console.log('🔍 Henter opdateret vine-data fra backend...');
+    // KRITISK FIX: Brug allWines direkte i stedet for backend!
     let wines = [];
-    try {
-      wines = await apiCall('/api/reports/lager');
-      console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
-      if (wines && wines.length > 0) {
-        console.log('📊 Første vin i data:', wines[0]);
+    if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+      console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
+      wines = allWines;
+    } else {
+      console.warn('⚠️ allWines er tom - prøver backend...');
+      try {
+        wines = await apiCall('/api/reports/lager');
+        console.log('✅ Hentet fra backend:', wines ? wines.length : 0, 'vine');
+      } catch (error) {
+        console.error('❌ Fejl ved hentning af vine-data:', error);
+        alert(`Fejl ved hentning af data: ${error.message}`);
+        return;
       }
-    } catch (error) {
-      console.error('❌ Fejl ved hentning af vine-data:', error);
-      alert(`Fejl ved hentning af data: ${error.message}`);
-      return;
     }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
       console.warn('⚠️ Ingen vine-data fundet!');
-      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine. Prøv at importere data først.');
+      alert('Ingen vine-data fundet. Klik på "Opdater" knappen eller importer data først.');
       return;
     }
     
@@ -3012,13 +3015,19 @@ async function generateFullReportPDFForDownload(report) {
   try {
     console.log('📥 Downloader fuld PDF for rapport:', report);
     
-    // Hent vine-data fra backend (samme som mobil scanneren gjorde)
-    const wines = await apiCall('/api/reports/lager');
-    console.log('✅ Hentet vine-data:', wines ? wines.length : 0, 'vine');
+    // KRITISK FIX: Brug allWines direkte i stedet for backend!
+    let wines = [];
+    if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+      console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
+      wines = allWines;
+    } else {
+      console.warn('⚠️ allWines er tom - prøver backend...');
+      wines = await apiCall('/api/reports/lager');
+    }
     
     if (!wines || !Array.isArray(wines) || wines.length === 0) {
       console.warn('⚠️ Ingen vine-data fundet!');
-      alert('Ingen vine-data fundet. Tjek om lageret indeholder vine.');
+      alert('Ingen vine-data fundet. Klik på "Opdater" knappen eller importer data først.');
       return;
     }
     
@@ -3325,41 +3334,38 @@ async function generateLavStatusRapport() {
     
     console.log('✅ Alle nødvendige funktioner fundet');
     
-    // Vis besked
-    alert('Genererer rapport...');
+    // KRITISK FIX: Brug allWines direkte i stedet for at kalde backend!
+    // Backend returnerer tom data selvom frontend har data
+    console.log('📦 Tjekker allWines...');
+    console.log('  allWines:', allWines);
+    console.log('  allWines.length:', allWines ? allWines.length : 'undefined');
     
-    // Hent vine
-    console.log('📡 Henter vine fra /api/reports/lager...');
     let wines = [];
-    try {
-      wines = await apiCall('/api/reports/lager');
-      console.log('📦 Svar fra backend:', wines);
-      console.log('📦 Antal vine:', wines ? wines.length : 0);
-    } catch (apiError) {
-      console.error('❌ API FEJL:', apiError);
-      alert('FEJL ved hentning af data: ' + (apiError.message || 'Ukendt fejl'));
+    
+    // FØRST: Prøv at bruge allWines direkte (data er allerede i frontend!)
+    if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+      console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
+      wines = allWines;
+    } else {
+      // FALLBACK: Hvis allWines er tom, prøv at hente fra backend
+      console.log('⚠️ allWines er tom - prøver at hente fra backend...');
+      try {
+        wines = await apiCall('/api/reports/lager');
+        console.log('📦 Hentet fra backend:', wines ? wines.length : 0, 'vine');
+      } catch (apiError) {
+        console.error('❌ API FEJL:', apiError);
+        alert('FEJL: Kunne ikke hente data. Prøv at klikke på "Opdater" knappen først.');
+        return;
+      }
+    }
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      console.warn('⚠️ Ingen vine fundet');
+      alert('Ingen vine fundet. Klik på "Opdater" knappen eller importer data først.');
       return;
     }
     
-    if (!wines) {
-      console.warn('⚠️ wines er null/undefined');
-      alert('Ingen data modtaget fra server');
-      return;
-    }
-    
-    if (!Array.isArray(wines)) {
-      console.warn('⚠️ wines er ikke en array:', typeof wines, wines);
-      alert('Data fra server er ikke korrekt format');
-      return;
-    }
-    
-    if (wines.length === 0) {
-      console.warn('⚠️ Ingen vine i array');
-      alert('Ingen vine fundet. Importer data først.');
-      return;
-    }
-    
-    console.log('✅', wines.length, 'vine fundet');
+    console.log('✅', wines.length, 'vine fundet - genererer rapport...');
     
     // Beregn total værdi
     let totalVærdi = 0;
@@ -3501,7 +3507,21 @@ async function generateLavStatusRapport() {
 
 async function generateLagerReport() {
   try {
-    const wines = await apiCall('/api/reports/lager');
+    // KRITISK FIX: Brug allWines direkte i stedet for backend!
+    let wines = [];
+    if (allWines && Array.isArray(allWines) && allWines.length > 0) {
+      console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
+      wines = allWines;
+    } else {
+      console.warn('⚠️ allWines er tom - prøver backend...');
+      wines = await apiCall('/api/reports/lager');
+    }
+    
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      alert('Ingen vine fundet. Klik på "Opdater" knappen eller importer data først.');
+      return;
+    }
+    
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
@@ -3608,7 +3628,12 @@ async function generateLagerReport() {
 // Download lager rapport
 async function generateLagerReportDownload() {
   try {
-    const wines = await apiCall('/api/reports/lager');
+    // KRITISK FIX: Brug allWines direkte!
+    let wines = allWines && Array.isArray(allWines) && allWines.length > 0 ? allWines : await apiCall('/api/reports/lager');
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      alert('Ingen vine fundet. Klik på "Opdater" knappen eller importer data først.');
+      return;
+    }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
@@ -3704,7 +3729,12 @@ async function generateLagerReportDownload() {
 // Vis lager rapport i browser (ikke download)
 async function generateLagerReportViewOnly() {
   try {
-    const wines = await apiCall('/api/reports/lager');
+    // KRITISK FIX: Brug allWines direkte!
+    let wines = allWines && Array.isArray(allWines) && allWines.length > 0 ? allWines : await apiCall('/api/reports/lager');
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      alert('Ingen vine fundet. Klik på "Opdater" knappen eller importer data først.');
+      return;
+    }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     
@@ -4368,8 +4398,12 @@ async function finishCounting() {
   }
   
   try {
-    // Generer lagerrapport automatisk
-    const wines = await apiCall('/api/reports/lager');
+    // KRITISK FIX: Brug allWines direkte i stedet for backend!
+    let wines = allWines && Array.isArray(allWines) && allWines.length > 0 ? allWines : await apiCall('/api/reports/lager');
+    if (!wines || !Array.isArray(wines) || wines.length === 0) {
+      console.warn('⚠️ Ingen vine fundet til rapport');
+      return;
+    }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     

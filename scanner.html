@@ -457,23 +457,62 @@
         video.srcObject = stream;
         qrScanning = true;
         
-        // onloadedmetadata håndteres i startScanning funktionen
+        console.log('✅ Kamera stream tildelt, qrScanning = true');
+        
+        // Start scanning når video er klar
+        const startScanning = () => {
+          if (qrScanning && video && video.srcObject) {
+            console.log('✅ Starter scanFrame()...');
+            if (scanAnimationFrame) {
+              cancelAnimationFrame(scanAnimationFrame);
+            }
+            scanFrame();
+          } else {
+            console.warn('⚠️ Kan ikke starte scanning:', {
+              qrScanning,
+              hasVideo: !!video,
+              hasStream: !!video?.srcObject
+            });
+          }
+        };
+        
+        // FALLBACK: Start scanning når metadata er klar
+        video.onloadedmetadata = () => {
+          console.log('✅ Video metadata klar, readyState:', video.readyState);
+          showStatus('Kamera klar - starter scanning...', 'success', 2000);
+          video.play().then(() => {
+            console.log('✅ Video afspiller');
+            hideStatus();
+            startScanning();
+          }).catch(err => {
+            console.error('❌ Fejl ved afspilning i onloadedmetadata:', err);
+            showStatus(`FEJL ved afspilning: ${err.message}`, 'error', 5000);
+          });
+        };
         
         // Prøv at afspille med det samme
         video.play().then(() => {
+          console.log('✅ Video afspiller (direkte)');
           hideStatus();
+          startScanning();
         }).catch(err => {
+          console.error('❌ Fejl ved direkte afspilning:', err);
           showStatus(`FEJL ved afspilning: ${err.message}`, 'error', 5000);
         });
         
-        // Start scanning efter kort ventetid - scanFrame håndterer debounce
+        // FALLBACK: Start scanning efter kort ventetid
         setTimeout(() => {
           if (qrScanning && video && video.srcObject) {
-            scanFrame();
+            if (video.readyState >= 2) {
+              console.log('✅ Fallback: Starter scanFrame() efter timeout, readyState:', video.readyState);
+              startScanning();
+            } else {
+              console.warn('⚠️ Video ikke klar endnu, readyState:', video.readyState);
+            }
           } else {
-            showStatus('FEJL: Scanner ikke startet korrekt', 'error', 5000);
+            console.warn('⚠️ Scanner ikke klar efter timeout');
           }
-        }, 500);
+        }, 1500);
         
       } catch (error) {
         qrScanning = false;
