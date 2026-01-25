@@ -147,7 +147,7 @@
     </div>
   </div>
 
-  <script src="config.js?v=39"></script>
+  <script src="config.js?v=40"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script>
@@ -155,14 +155,15 @@
     let qrStream = null;
     let qrScanning = false;
     let currentWine = null;
-    let scanAnimationFrame = null;
+    let scanAnimationFrame = null; // FJERNET DUPLIKAT
     let scannedWines = new Map();
-    let scanAnimationFrame = null;
     let locations = [];
     let selectedLocationId = null;
     let locationsLoaded = false; // Track om lokationer er hentet
     let lastScannedCode = null; // Debounce: sidste scannede kode
     let lastScanTime = 0; // Debounce: tidspunkt for sidste scan
+    let video = null; // Cache video element
+    let canvas = null; // Cache canvas element
     
     // VIS STATUS BESKED PÅ SKÆRMEN
     function showStatus(message, type = 'info', duration = 3000) {
@@ -438,17 +439,30 @@
     
     // START SCANNER
     async function startQRScanner() {
+      console.log('🚀 startQRScanner() kaldt');
+      
       if (qrScanning) {
-        console.log('⚠️ Scanner kører allerede');
+        console.log('⚠️ Scanner kører allerede - ignorerer');
         return;
       }
       
-      const video = document.getElementById('qr-video');
-      const canvas = document.getElementById('qr-canvas');
-      if (!video || !canvas) {
-        showStatus('FEJL: Video eller canvas element ikke fundet', 'error', 0);
+      // Cache video og canvas elementer
+      video = document.getElementById('qr-video');
+      canvas = document.getElementById('qr-canvas');
+      
+      if (!video) {
+        console.error('❌ Video element ikke fundet!');
+        showStatus('FEJL: Video element ikke fundet', 'error', 0);
         return;
       }
+      
+      if (!canvas) {
+        console.error('❌ Canvas element ikke fundet!');
+        showStatus('FEJL: Canvas element ikke fundet', 'error', 0);
+        return;
+      }
+      
+      console.log('✅ Video og canvas elementer fundet');
       
       try {
         showStatus('Anmoder om kamera adgang...', 'info', 0);
@@ -465,19 +479,41 @@
         
         // Start scanning når video er klar
         const startScanning = () => {
-          if (qrScanning && video && video.srcObject) {
-            console.log('✅ Starter scanFrame()...');
-            if (scanAnimationFrame) {
-              cancelAnimationFrame(scanAnimationFrame);
-            }
-            scanFrame();
-          } else {
-            console.warn('⚠️ Kan ikke starte scanning:', {
-              qrScanning,
-              hasVideo: !!video,
-              hasStream: !!video?.srcObject
-            });
+          console.log('🔍 startScanning() kaldt');
+          console.log('  qrScanning:', qrScanning);
+          console.log('  video:', !!video);
+          console.log('  video.srcObject:', !!video?.srcObject);
+          console.log('  video.readyState:', video?.readyState);
+          console.log('  jsQR defineret:', typeof jsQR !== 'undefined');
+          
+          if (!qrScanning) {
+            console.warn('⚠️ qrScanning er false - kan ikke starte');
+            return;
           }
+          
+          if (!video) {
+            console.error('❌ Video element mangler');
+            return;
+          }
+          
+          if (!video.srcObject) {
+            console.warn('⚠️ Video stream mangler - venter...');
+            setTimeout(startScanning, 500);
+            return;
+          }
+          
+          if (typeof jsQR === 'undefined') {
+            console.warn('⚠️ jsQR ikke defineret - venter...');
+            setTimeout(startScanning, 500);
+            return;
+          }
+          
+          console.log('✅ Starter scanFrame()...');
+          if (scanAnimationFrame) {
+            cancelAnimationFrame(scanAnimationFrame);
+            scanAnimationFrame = null;
+          }
+          scanFrame();
         };
         
         // FALLBACK: Start scanning når metadata er klar
@@ -536,13 +572,35 @@
     
     // SCAN FRAME - MED DEBOUNCE OG VALIDERING
     function scanFrame() {
+      // KRITISK: Tjek om scanning stadig er aktiv
       if (!qrScanning) {
         console.log('⚠️ qrScanning er false - stopper scanning');
+        if (scanAnimationFrame) {
+          cancelAnimationFrame(scanAnimationFrame);
+          scanAnimationFrame = null;
+        }
         return;
+      }
+      
+      // KRITISK: Hent video element hvis det ikke er cached
+      if (!video) {
+        video = document.getElementById('qr-video');
       }
       
       if (!video) {
         console.error('❌ video element ikke fundet');
+        qrScanning = false;
+        return;
+      }
+      
+      // KRITISK: Hent canvas element hvis det ikke er cached
+      if (!canvas) {
+        canvas = document.getElementById('qr-canvas');
+      }
+      
+      if (!canvas) {
+        console.error('❌ canvas element ikke fundet');
+        qrScanning = false;
         return;
       }
       
@@ -619,9 +677,15 @@
         // Fortsæt scanning selv ved fejl
       }
       
-      // Fortsæt scanning
+      // Fortsæt scanning - ALTID hvis qrScanning er true
       if (qrScanning) {
         scanAnimationFrame = requestAnimationFrame(scanFrame);
+      } else {
+        console.log('⚠️ qrScanning er false - stopper scan loop');
+        if (scanAnimationFrame) {
+          cancelAnimationFrame(scanAnimationFrame);
+          scanAnimationFrame = null;
+        }
       }
     }
 
@@ -638,52 +702,86 @@
         return;
       }
       
-      console.log(`🔍 Søger efter vin med kode: ${codeData.trim()}`);
+      const trimmedCode = codeData.trim();
+      console.log(`🔍 Søger efter vin med kode: "${trimmedCode}"`);
+      showStatus('Søger efter vin...', 'info', 2000);
       
       try {
         // Prøv først med VIN-ID direkte
         let wine = null;
+        let foundMethod = '';
+        
         try {
-          wine = await apiCall(`/api/wines/${encodeURIComponent(codeData.trim())}`);
+          console.log(`📤 Prøver /api/wines/${encodeURIComponent(trimmedCode)}`);
+          wine = await apiCall(`/api/wines/${encodeURIComponent(trimmedCode)}`);
+          foundMethod = '/api/wines/:id';
           console.log('✅ Vin fundet via /api/wines/:id:', wine);
         } catch (e1) {
-          console.warn('⚠️ Fejl ved /api/wines/:id, prøver /api/wines/barcode/:barcode');
+          console.warn('⚠️ Fejl ved /api/wines/:id:', e1.message);
           // Fallback: Prøv med barcode endpoint
           try {
-            wine = await apiCall(`/api/wines/barcode/${encodeURIComponent(codeData.trim())}`);
+            console.log(`📤 Prøver /api/wines/barcode/${encodeURIComponent(trimmedCode)}`);
+            wine = await apiCall(`/api/wines/barcode/${encodeURIComponent(trimmedCode)}`);
+            foundMethod = '/api/wines/barcode/:barcode';
             console.log('✅ Vin fundet via /api/wines/barcode/:barcode:', wine);
           } catch (e2) {
-            console.warn('⚠️ Fejl ved /api/wines/barcode/:barcode, prøver at søge i alle wines');
+            console.warn('⚠️ Fejl ved /api/wines/barcode/:barcode:', e2.message);
             // Sidste fallback: Hent alle wines og søg manuelt
             try {
+              console.log('📤 Henter alle wines for manuel søgning...');
               const allWines = await apiCall('/api/wines');
-              if (Array.isArray(allWines)) {
-                wine = allWines.find(w => 
-                  w.vinId === codeData.trim() || 
-                  w.varenummer === codeData.trim() ||
-                  w.barcode === codeData.trim()
-                );
+              console.log(`📦 Modtaget ${allWines ? allWines.length : 0} vine`);
+              
+              if (Array.isArray(allWines) && allWines.length > 0) {
+                wine = allWines.find(w => {
+                  const matches = 
+                    (w.vinId && w.vinId.toString() === trimmedCode) ||
+                    (w.varenummer && w.varenummer.toString() === trimmedCode) ||
+                    (w.barcode && w.barcode.toString() === trimmedCode);
+                  if (matches) {
+                    console.log('✅ Match fundet:', w);
+                  }
+                  return matches;
+                });
+                
                 if (wine) {
+                  foundMethod = 'manuel søgning i alle wines';
                   console.log('✅ Vin fundet i alle wines:', wine);
                 } else {
                   console.warn('⚠️ Vin ikke fundet i alle wines');
+                  console.log('  Søgte efter:', trimmedCode);
+                  console.log('  Eksempel vine:', allWines.slice(0, 3).map(w => ({
+                    vinId: w.vinId,
+                    varenummer: w.varenummer,
+                    barcode: w.barcode
+                  })));
                 }
+              } else {
+                console.warn('⚠️ Ingen vine modtaget fra backend');
               }
             } catch (e3) {
               console.error('❌ Alle metoder fejlede:', e3);
+              console.error('  e1:', e1.message);
+              console.error('  e2:', e2.message);
+              console.error('  e3:', e3.message);
             }
           }
         }
         
         if (wine && wine.vinId) {
+          console.log(`✅ Vin fundet via ${foundMethod}:`, wine.vinId, wine.navn);
+          showStatus('Vin fundet!', 'success', 1000);
           showQuantityModal(wine, false);
         } else {
           console.warn('⚠️ Vin ikke fundet - viser "Ukendt vare" modal');
-          showQuantityModal({ vinId: codeData.trim(), navn: 'Ukendt vare' }, true);
+          showStatus('Vin ikke fundet', 'warning', 2000);
+          showQuantityModal({ vinId: trimmedCode, navn: 'Ukendt vare' }, true);
         }
       } catch (error) {
         console.error('❌ KRITISK FEJL i handleScan:', error);
-        showQuantityModal({ vinId: codeData.trim(), navn: 'Ukendt vare' }, true);
+        console.error('  Error stack:', error.stack);
+        showStatus('Fejl ved søgning', 'error', 2000);
+        showQuantityModal({ vinId: trimmedCode, navn: 'Ukendt vare' }, true);
       }
     }
 
