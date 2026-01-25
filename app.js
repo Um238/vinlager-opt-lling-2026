@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v102 - FIX: Labels side om side + QR koder for Øl & Vand + Status rapport export');
+console.log('Version: v103 - FIX: Label filtre for Øl & Vand + Scanner kategori check + Auto-update persistence');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -145,6 +145,10 @@ function startAutoUpdate() {
           }
           if (typeof renderOlVandLager === 'function') {
             renderOlVandLager();
+          }
+          // KRITISK: Opdater også label filtre
+          if (typeof populateLabelFiltersOlVand === 'function') {
+            populateLabelFiltersOlVand();
           }
         }).catch((err) => {
           // Log kun hver 3. fejl
@@ -5489,6 +5493,10 @@ async function loadOlVand() {
     }
     updateDashboardOlVand();
     renderOlVandLager();
+    // KRITISK: Opdater også label filtre selv ved fejl
+    if (typeof populateLabelFiltersOlVand === 'function') {
+      populateLabelFiltersOlVand();
+    }
   }
 }
 
@@ -5693,6 +5701,98 @@ function populateFiltersOlVand() {
       option.textContent = loc;
       lokationSelect.appendChild(option);
     });
+  }
+  
+  if (reolSelect) {
+    const reoler = [...new Set(allOlVand.map(p => p.reol).filter(Boolean))].sort();
+    reolSelect.innerHTML = '<option value="">Alle reoler</option>';
+    reoler.forEach(reol => {
+      const option = document.createElement('option');
+      option.value = reol;
+      option.textContent = reol;
+      reolSelect.appendChild(option);
+    });
+  }
+  
+  if (hyldeSelect) {
+    const hylder = [...new Set(allOlVand.map(p => p.hylde).filter(Boolean))].sort();
+    hyldeSelect.innerHTML = '<option value="">Alle hylder</option>';
+    hylder.forEach(hylde => {
+      const option = document.createElement('option');
+      option.value = hylde;
+      option.textContent = hylde;
+      hyldeSelect.appendChild(option);
+    });
+  }
+}
+
+// Populate label filters for Vin
+function populateLabelFilters() {
+  if (!allWines || !Array.isArray(allWines)) {
+    return;
+  }
+  
+  const lokationSelect = document.getElementById('label-lokation');
+  const reolSelect = document.getElementById('label-reol');
+  const hyldeSelect = document.getElementById('label-hylde');
+  
+  if (lokationSelect) {
+    const lokationer = [...new Set(allWines.map(w => w.lokation).filter(Boolean))].sort();
+    lokationSelect.innerHTML = '<option value="">Alle lokationer</option>';
+    lokationer.forEach(loc => {
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = loc;
+      lokationSelect.appendChild(option);
+    });
+  }
+  
+  if (reolSelect) {
+    const reoler = [...new Set(allWines.map(w => w.reol).filter(Boolean))].sort();
+    reolSelect.innerHTML = '<option value="">Alle reoler</option>';
+    reoler.forEach(reol => {
+      const option = document.createElement('option');
+      option.value = reol;
+      option.textContent = reol;
+      reolSelect.appendChild(option);
+    });
+  }
+  
+  if (hyldeSelect) {
+    const hylder = [...new Set(allWines.map(w => w.hylde).filter(Boolean))].sort();
+    hyldeSelect.innerHTML = '<option value="">Alle hylder</option>';
+    hylder.forEach(hylde => {
+      const option = document.createElement('option');
+      option.value = hylde;
+      option.textContent = hylde;
+      hyldeSelect.appendChild(option);
+    });
+  }
+}
+
+// Populate label filters for Øl & Vand
+function populateLabelFiltersOlVand() {
+  if (!allOlVand || !Array.isArray(allOlVand)) {
+    console.warn('⚠️ allOlVand er tom eller ikke defineret');
+    return;
+  }
+  
+  const lokationSelect = document.getElementById('label-lokation-ol-vand');
+  const reolSelect = document.getElementById('label-reol-ol-vand');
+  const hyldeSelect = document.getElementById('label-hylde-ol-vand');
+  
+  if (lokationSelect) {
+    const lokationer = [...new Set(allOlVand.map(p => p.lokation).filter(Boolean))].sort();
+    lokationSelect.innerHTML = '<option value="">Alle lokationer</option>';
+    lokationer.forEach(loc => {
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = loc;
+      lokationSelect.appendChild(option);
+    });
+    console.log(`✅ Fyldt ${lokationer.length} lokationer i label dropdown for Øl & Vand`);
+  } else {
+    console.error('❌ label-lokation-ol-vand select ikke fundet!');
   }
   
   if (reolSelect) {
