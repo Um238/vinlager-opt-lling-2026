@@ -118,6 +118,7 @@ function parseExcel(filePath) {
     'navn': 'navn',
     'type': 'type',
     'kategori': 'kategori',
+    'størrelse': 'størrelse', // For Øl & Vand
     'land': 'land',
     'region': 'region',
     'drue': 'drue',
@@ -291,24 +292,74 @@ function findOrUpdateInventory(wineId, locationId, reol, hylde, antal, minAntal)
 }
 
 // Importer data med valgt mode (ny version med inventory system)
-async function importData(rows, mode) {
+async function importData(rows, mode, category = 'vin') {
   const results = {
     importeret: 0,
     opdateret: 0,
     fejl: []
   };
 
-  // Mode 1: Overskriv hele lageret
+  // KRITISK: Mode 1: Overskriv hele lageret - kun for den specifikke kategori
   if (mode === 'overskriv') {
-    await new Promise((resolve, reject) => {
-      db.run('DELETE FROM inventory', (err) => {
-        if (err) return reject(err);
-        db.run('DELETE FROM wines', (err) => {
+    // Hvis category er 'ol-vand', slet kun øl & vand produkter
+    // Hvis category er 'vin', slet kun vin produkter
+    if (category === 'ol-vand') {
+      // Slet kun øl & vand (kategori indeholder øl, vand, sodavand, fadøl, flaske, dåse)
+      await new Promise((resolve, reject) => {
+        // Først find alle øl & vand wine IDs
+        db.all(`SELECT id FROM wines WHERE 
+          (kategori LIKE '%øl%' OR kategori LIKE '%vand%' OR kategori LIKE '%sodavand%' OR 
+           kategori LIKE '%fadøl%' OR kategori LIKE '%flaske%' OR kategori LIKE '%dåse%' OR
+           vinId LIKE 'OL-%' OR vinId LIKE 'W%')`, [], (err, olVandWines) => {
           if (err) return reject(err);
-          resolve();
+          
+          if (olVandWines && olVandWines.length > 0) {
+            const wineIds = olVandWines.map(w => w.id);
+            const placeholders = wineIds.map(() => '?').join(',');
+            
+            // Slet inventory for disse wines
+            db.run(`DELETE FROM inventory WHERE wine_id IN (${placeholders})`, wineIds, (err) => {
+              if (err) return reject(err);
+              // Slet wines
+              db.run(`DELETE FROM wines WHERE id IN (${placeholders})`, wineIds, (err) => {
+                if (err) return reject(err);
+                resolve();
+              });
+            });
+          } else {
+            resolve();
+          }
         });
       });
-    });
+    } else {
+      // Slet kun vin (ikke øl & vand)
+      await new Promise((resolve, reject) => {
+        // Find alle VIN wine IDs (ikke øl & vand)
+        db.all(`SELECT id FROM wines WHERE 
+          (kategori NOT LIKE '%øl%' AND kategori NOT LIKE '%vand%' AND kategori NOT LIKE '%sodavand%' AND 
+           kategori NOT LIKE '%fadøl%' AND kategori NOT LIKE '%flaske%' AND kategori NOT LIKE '%dåse%' AND
+           vinId NOT LIKE 'OL-%' AND vinId NOT LIKE 'W%') OR kategori IS NULL`, [], (err, vinWines) => {
+          if (err) return reject(err);
+          
+          if (vinWines && vinWines.length > 0) {
+            const wineIds = vinWines.map(w => w.id);
+            const placeholders = wineIds.map(() => '?').join(',');
+            
+            // Slet inventory for disse wines
+            db.run(`DELETE FROM inventory WHERE wine_id IN (${placeholders})`, wineIds, (err) => {
+              if (err) return reject(err);
+              // Slet wines
+              db.run(`DELETE FROM wines WHERE id IN (${placeholders})`, wineIds, (err) => {
+                if (err) return reject(err);
+                resolve();
+              });
+            });
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
   }
 
   // Process hver række
@@ -366,8 +417,8 @@ async function importData(rows, mode) {
       // 1. Find eller opret vin
       const wineId = await findOrCreateWine(wine);
       
-      // 2. Find eller opret lokation
-      const locationId = await findOrCreateLocation(locationName, 'Vin');
+      // 2. Find eller opret lokation (med korrekt kategori)
+      const locationId = await findOrCreateLocation(locationName, category);
       
       // 3. Find eller opret/opdater inventory
       const inventoryResult = await findOrUpdateInventory(wineId, locationId, reol, hylde, antal, minAntal);
@@ -392,7 +443,7 @@ exports.importCSV = async (req, res) => {
     return res.status(400).json({ error: 'Ingen fil uploadet' });
   }
 
-  const { mode } = req.body; // overskriv, tilføj, opdater
+  const { mode, category } = req.body; // overskriv, tilføj, opdater + vin eller ol-vand
 
   if (!['overskriv', 'tilføj', 'opdater'].includes(mode)) {
     return res.status(400).json({ error: 'Ugyldig mode. Brug: overskriv, tilføj eller opdater' });
@@ -400,7 +451,7 @@ exports.importCSV = async (req, res) => {
 
   try {
     const rows = parseCSV(req.file.path);
-    const results = await importData(rows, mode);
+    const results = await importData(rows, mode, category || 'vin');
 
     // Slet temp fil
     fs.unlinkSync(req.file.path);
@@ -423,7 +474,7 @@ exports.importExcel = async (req, res) => {
     return res.status(400).json({ error: 'Ingen fil uploadet' });
   }
 
-  const { mode } = req.body; // overskriv, tilføj, opdater
+  const { mode, category } = req.body; // overskriv, tilføj, opdater + vin eller ol-vand
 
   if (!['overskriv', 'tilføj', 'opdater'].includes(mode)) {
     return res.status(400).json({ error: 'Ugyldig mode. Brug: overskriv, tilføj eller opdater' });
@@ -434,7 +485,8 @@ exports.importExcel = async (req, res) => {
       filename: req.file.originalname,
       path: req.file.path,
       size: req.file.size,
-      mimetype: req.file.mimetype
+      mimetype: req.file.mimetype,
+      category: category || 'vin'
     });
 
     const rows = parseExcel(req.file.path);
@@ -444,7 +496,7 @@ exports.importExcel = async (req, res) => {
       throw new Error('Excel filen indeholder ingen data. Tjek at der er data under header-rækken.');
     }
 
-    const results = await importData(rows, mode);
+    const results = await importData(rows, mode, category || 'vin');
 
     // Slet temp fil
     if (fs.existsSync(req.file.path)) {
