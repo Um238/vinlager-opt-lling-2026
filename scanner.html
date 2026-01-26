@@ -262,29 +262,30 @@
         console.log(`📥 Response status: ${response.status} ${response.statusText}`);
         
         if (!response.ok) {
+          // Hvis 401 eller 404, prøv at returnere tom array i stedet for at fejle
+          if (response.status === 404) {
+            console.warn(`⚠️ 404 for ${endpoint} - returnerer tom array`);
+            return [];
+          }
+          
           // Hvis 401, prøv at hente token fra auth objekt
           if (response.status === 401) {
-            console.warn('⚠️ 401 Unauthorized - tjekker auth...');
-            // Prøv at hente token fra auth hvis det findes
-            if (typeof auth !== 'undefined' && auth && auth.getToken) {
-              const authToken = auth.getToken();
-              if (authToken && authToken !== token) {
-                console.log('🔄 Prøver igen med token fra auth objekt');
-                headers['Authorization'] = `Bearer ${authToken}`;
-                const retryResponse = await fetch(url, {
-                  ...options,
-                  signal: ac.signal,
-                  headers: headers
-                });
-                if (retryResponse.ok) {
-                  const data = await retryResponse.json();
-                  return data;
-                }
+            console.warn('⚠️ 401 Unauthorized - prøver uden auth...');
+            // For locations endpoint, prøv uden auth
+            if (endpoint.includes('/locations')) {
+              const retryResponse = await fetch(url, {
+                ...options,
+                signal: ac.signal,
+                headers: { 'Content-Type': 'application/json' }
+              });
+              if (retryResponse.ok) {
+                const data = await retryResponse.json();
+                return data;
               }
             }
           }
           
-          const errorText = await response.text();
+          const errorText = await response.text().catch(() => '');
           console.error(`❌ API fejl ${response.status}:`, errorText);
           throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
         }
@@ -332,19 +333,25 @@
         
         // KRITISK FIX: Brug apiCall() i stedet for fetch() så authentication virker!
         let data = [];
+        let locationsFromProducts = false;
+        
         try {
           // Prøv at hente lokationer - selv uden token kan backend være åben
           data = await apiCall('/api/locations');
           console.log('📦 Lokationer modtaget fra backend:', data);
-          
-          // KRITISK: Hvis ingen lokationer, prøv at hente fra produkter
-          if (!data || data.length === 0) {
-            console.log('⚠️ Ingen lokationer i backend - henter fra produkter...');
-            try {
-              const products = await apiCall('/api/wines');
-              const uniqueLocations = [...new Set((products || []).map(p => p.lokation).filter(Boolean))];
-              console.log(`📋 Fundet ${uniqueLocations.length} unikke lokationer fra produkter`);
-              
+        } catch (apiError) {
+          console.warn('⚠️ Kunne ikke hente lokationer fra /api/locations:', apiError.message);
+        }
+        
+        // KRITISK: Hvis ingen lokationer fra backend, prøv at hente fra produkter
+        if (!data || data.length === 0) {
+          console.log('⚠️ Ingen lokationer i backend - henter fra produkter...');
+          try {
+            const products = await apiCall('/api/wines').catch(() => []);
+            const uniqueLocations = [...new Set((products || []).map(p => p.lokation).filter(Boolean))];
+            console.log(`📋 Fundet ${uniqueLocations.length} unikke lokationer fra produkter`);
+            
+            if (uniqueLocations.length > 0) {
               // Opret lokation objekter fra produkter
               data = uniqueLocations.map((name, index) => {
                 const nameLower = name.toLowerCase();
@@ -353,14 +360,16 @@
                                  ? 'Øl & Vand' : 'Vin';
                 return { id: index + 1, name: name, category: category };
               });
-            } catch (e) {
-              console.warn('⚠️ Kunne ikke hente lokationer fra produkter:', e);
+              locationsFromProducts = true;
             }
+          } catch (e) {
+            console.warn('⚠️ Kunne ikke hente lokationer fra produkter:', e);
           }
-        } catch (apiError) {
-          console.error('❌ Fejl ved hentning fra backend:', apiError);
-          // FALLBACK: Opret standard lokationer hvis backend fejler
-          console.log('⚠️ Backend fejler - bruger standard lokationer');
+        }
+        
+        // FALLBACK: Hvis stadig ingen data, brug standard lokationer
+        if (!data || data.length === 0) {
+          console.log('⚠️ Ingen lokationer fundet - bruger standard lokationer');
           data = [
             { id: 1, name: 'Restaurant 1', category: 'Vin' },
             { id: 2, name: 'Vinlager', category: 'Vin' },
@@ -371,7 +380,9 @@
             { id: 7, name: 'Køleren Øl & vand 2', category: 'Øl & Vand' },
             { id: 8, name: 'Bar 2', category: 'Øl & Vand' }
           ];
-          showStatus('⚠️ Bruger standard lokationer', 'warning', 3000);
+          if (!locationsFromProducts) {
+            showStatus('⚠️ Bruger standard lokationer', 'warning', 3000);
+          }
         }
         
         if (Array.isArray(data) && data.length > 0) {
@@ -436,6 +447,8 @@
           
           showStatus(`✅ ${data.length} lokationer klar`, 'success', 2000);
           console.log(`✅ ${data.length} lokationer indlæst (${vinLocations.length} Vin, ${olVandLocations.length} Øl & Vand)`);
+          locationsLoaded = true;
+          startQRScannerWhenReady();
         } else {
           // FALLBACK: Opret standard lokationer hvis ingen data
           console.log('⚠️ Ingen lokationer - opretter standard lokationer');
@@ -472,29 +485,56 @@
           });
           select.appendChild(optgroupOlVand);
           
-          // Gruppér standard lokationer
-          const optgroupVin = document.createElement('optgroup');
-          optgroupVin.label = '🍷 Vinlager';
-          locations.filter(l => l.category === 'Vin').forEach(loc => {
-            const o = document.createElement('option');
-            o.value = loc.id;
-            o.textContent = loc.name;
-            optgroupVin.appendChild(o);
-          });
-          select.appendChild(optgroupVin);
-          
-          const optgroupOlVand = document.createElement('optgroup');
-          optgroupOlVand.label = '🍺 Øl & vand';
-          locations.filter(l => l.category === 'Øl & Vand').forEach(loc => {
-            const o = document.createElement('option');
-            o.value = loc.id;
-            o.textContent = loc.name;
-            optgroupOlVand.appendChild(o);
-          });
-          select.appendChild(optgroupOlVand);
-          
-          showStatus('✅ Standard lokationer oprettet', 'success', 2000);
+          showStatus(`✅ ${locations.length} standard lokationer klar`, 'success', 2000);
+          console.log(`✅ ${locations.length} standard lokationer indlæst`);
+          locationsLoaded = true;
+          startQRScannerWhenReady();
         }
+      } catch (error) {
+        console.error('❌ KRITISK FEJL ved loadLocations:', error);
+        // SIKR ALTID at lokationer er sat, selv ved fejl
+        if (!locations || locations.length === 0) {
+          locations = [
+            { id: 1, name: 'Restaurant 1', category: 'Vin' },
+            { id: 2, name: 'Vinlager', category: 'Vin' },
+            { id: 3, name: 'Vinkøler', category: 'Vin' },
+            { id: 4, name: 'Bar 1', category: 'Øl & Vand' },
+            { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' },
+            { id: 6, name: 'Restaurant 2', category: 'Vin' },
+            { id: 7, name: 'Køleren Øl & vand 2', category: 'Øl & Vand' },
+            { id: 8, name: 'Bar 2', category: 'Øl & Vand' }
+          ];
+          const select = document.getElementById('location-select');
+          if (select) {
+            select.innerHTML = '<option value="">Alle lokationer</option>';
+            const optgroupVin = document.createElement('optgroup');
+            optgroupVin.label = '🍷 Vinlager';
+            locations.filter(l => l.category === 'Vin').forEach(loc => {
+              const o = document.createElement('option');
+              o.value = loc.id;
+              o.textContent = loc.name;
+              optgroupVin.appendChild(o);
+            });
+            select.appendChild(optgroupVin);
+            
+            const optgroupOlVand = document.createElement('optgroup');
+            optgroupOlVand.label = '🍺 Øl & vand';
+            locations.filter(l => l.category === 'Øl & Vand').forEach(loc => {
+              const o = document.createElement('option');
+              o.value = loc.id;
+              o.textContent = loc.name;
+              optgroupOlVand.appendChild(o);
+            });
+            select.appendChild(optgroupOlVand);
+            
+            showStatus('✅ Standard lokationer oprettet', 'success', 2000);
+          }
+        }
+        
+        // SIKR ALTID at locationsLoaded er sat
+        locationsLoaded = true;
+        setTimeout(() => hideStatus(), 2000);
+        startQRScannerWhenReady();
         
         locationsLoaded = true;
         setTimeout(() => hideStatus(), 2000);

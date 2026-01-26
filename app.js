@@ -3,7 +3,7 @@
 // ============================================
 console.log('========================================');
 console.log('=== APP.JS SCRIPT START ===');
-console.log('Version: v105 - FIX: Auto-load Øl & Vand ved start + Dynamiske lokationer + Bedre scrolling + Auto-update persistence');
+console.log('Version: v106 - FIX: Lokationer på mobil + Status rapport data check + Bedre error handling');
 console.log('Timestamp:', new Date().toISOString());
 console.log('========================================');
 
@@ -5994,10 +5994,12 @@ async function saveOlVandBackup(products) {
 // Generer lav status rapport for Øl & Vand
 async function generateLavStatusRapportOlVand() {
   console.log('=== GENERER LAV STATUS RAPPORT ØL & VAND START ===');
+  console.log(`📊 Initial allOlVand status: ${allOlVand ? allOlVand.length : 0} produkter`);
   
   try {
     // KRITISK: Prøv først at bruge eksisterende data
     if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
+      console.log('⚠️ allOlVand er tom - prøver at restore fra backup...');
       // Prøv at restore fra backup først
       try {
         const backup = localStorage.getItem('olVandBackup');
@@ -6005,6 +6007,8 @@ async function generateLavStatusRapportOlVand() {
           const restored = JSON.parse(backup);
           allOlVand = restored;
           console.log(`✅ Brugte ${allOlVand.length} Øl & Vand produkter fra backup`);
+        } else {
+          console.warn('⚠️ Ingen backup fundet i localStorage');
         }
       } catch (e) {
         console.warn('⚠️ Kunne ikke restore backup:', e);
@@ -6012,12 +6016,31 @@ async function generateLavStatusRapportOlVand() {
       
       // Hvis stadig tom, prøv at hente fra backend
       if (!allOlVand || allOlVand.length === 0) {
-        await loadOlVand();
+        console.log('⚠️ Stadig tom - prøver at hente fra backend...');
+        try {
+          await loadOlVand();
+          console.log(`✅ Efter loadOlVand: ${allOlVand ? allOlVand.length : 0} produkter`);
+        } catch (loadError) {
+          console.error('❌ Fejl ved loadOlVand:', loadError);
+          // Prøv at restore fra backup igen efter fejl
+          try {
+            const backup = localStorage.getItem('olVandBackup');
+            if (backup) {
+              allOlVand = JSON.parse(backup);
+              console.log(`✅ Restored ${allOlVand.length} produkter fra backup efter loadOlVand fejl`);
+            }
+          } catch (e) {
+            console.error('❌ Kunne ikke restore backup:', e);
+          }
+        }
       }
     }
     
+    console.log(`📊 Final allOlVand status: ${allOlVand ? allOlVand.length : 0} produkter`);
+    
     if (!allOlVand || !Array.isArray(allOlVand) || allOlVand.length === 0) {
       alert('Ingen Øl & Vand produkter fundet. Importer data først.');
+      console.error('❌ allOlVand er stadig tom efter alle forsøg');
       return;
     }
     
