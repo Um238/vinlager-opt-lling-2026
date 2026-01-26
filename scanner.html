@@ -318,7 +318,13 @@
       locationsLoaded = false;
       
       select.onchange = (e) => {
-        selectedLocationId = e.target.value ? parseInt(e.target.value) : null;
+        const value = e.target.value;
+        // Håndter både id (nummer) og navn (tekst)
+        if (value && !isNaN(value)) {
+          selectedLocationId = parseInt(value);
+        } else {
+          selectedLocationId = value; // Gem navn hvis det ikke er et nummer
+        }
       };
       
       try {
@@ -330,6 +336,27 @@
           // Prøv at hente lokationer - selv uden token kan backend være åben
           data = await apiCall('/api/locations');
           console.log('📦 Lokationer modtaget fra backend:', data);
+          
+          // KRITISK: Hvis ingen lokationer, prøv at hente fra produkter
+          if (!data || data.length === 0) {
+            console.log('⚠️ Ingen lokationer i backend - henter fra produkter...');
+            try {
+              const products = await apiCall('/api/wines');
+              const uniqueLocations = [...new Set((products || []).map(p => p.lokation).filter(Boolean))];
+              console.log(`📋 Fundet ${uniqueLocations.length} unikke lokationer fra produkter`);
+              
+              // Opret lokation objekter fra produkter
+              data = uniqueLocations.map((name, index) => {
+                const nameLower = name.toLowerCase();
+                const category = (nameLower.includes('øl') || nameLower.includes('vand') || 
+                                 nameLower.includes('bar') || nameLower.includes('køleren')) 
+                                 ? 'Øl & Vand' : 'Vin';
+                return { id: index + 1, name: name, category: category };
+              });
+            } catch (e) {
+              console.warn('⚠️ Kunne ikke hente lokationer fra produkter:', e);
+            }
+          }
         } catch (apiError) {
           console.error('❌ Fejl ved hentning fra backend:', apiError);
           // FALLBACK: Opret standard lokationer hvis backend fejler
@@ -339,7 +366,10 @@
             { id: 2, name: 'Vinlager', category: 'Vin' },
             { id: 3, name: 'Vinkøler', category: 'Vin' },
             { id: 4, name: 'Bar 1', category: 'Øl & Vand' },
-            { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' }
+            { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' },
+            { id: 6, name: 'Restaurant 2', category: 'Vin' },
+            { id: 7, name: 'Køleren Øl & vand 2', category: 'Øl & Vand' },
+            { id: 8, name: 'Bar 2', category: 'Øl & Vand' }
           ];
           showStatus('⚠️ Bruger standard lokationer', 'warning', 3000);
         }
@@ -374,7 +404,7 @@
             optgroupVin.label = '🍷 Vinlager';
             vinLocations.forEach(loc => {
               const o = document.createElement('option');
-              o.value = loc.id;
+              o.value = loc.id || loc.name; // Brug navn hvis ingen id
               o.textContent = loc.name;
               optgroupVin.appendChild(o);
             });
@@ -387,7 +417,7 @@
             optgroupOlVand.label = '🍺 Øl & vand';
             olVandLocations.forEach(loc => {
               const o = document.createElement('option');
-              o.value = loc.id;
+              o.value = loc.id || loc.name; // Brug navn hvis ingen id
               o.textContent = loc.name;
               optgroupOlVand.appendChild(o);
             });
@@ -398,7 +428,7 @@
           if (vinLocations.length === 0 && olVandLocations.length === 0) {
             data.forEach(loc => {
               const o = document.createElement('option');
-              o.value = loc.id;
+              o.value = loc.id || loc.name;
               o.textContent = loc.name;
               select.appendChild(o);
             });
@@ -414,9 +444,33 @@
             { id: 2, name: 'Vinlager', category: 'Vin' },
             { id: 3, name: 'Vinkøler', category: 'Vin' },
             { id: 4, name: 'Bar 1', category: 'Øl & Vand' },
-            { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' }
+            { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' },
+            { id: 6, name: 'Restaurant 2', category: 'Vin' },
+            { id: 7, name: 'Køleren Øl & vand 2', category: 'Øl & Vand' },
+            { id: 8, name: 'Bar 2', category: 'Øl & Vand' }
           ];
           select.innerHTML = '<option value="">Alle lokationer</option>';
+          
+          // Tilføj også fallback lokationer til dropdown
+          const optgroupVin = document.createElement('optgroup');
+          optgroupVin.label = '🍷 Vinlager';
+          locations.filter(l => l.category === 'Vin').forEach(loc => {
+            const o = document.createElement('option');
+            o.value = loc.id;
+            o.textContent = loc.name;
+            optgroupVin.appendChild(o);
+          });
+          select.appendChild(optgroupVin);
+          
+          const optgroupOlVand = document.createElement('optgroup');
+          optgroupOlVand.label = '🍺 Øl & vand';
+          locations.filter(l => l.category === 'Øl & Vand').forEach(loc => {
+            const o = document.createElement('option');
+            o.value = loc.id;
+            o.textContent = loc.name;
+            optgroupOlVand.appendChild(o);
+          });
+          select.appendChild(optgroupOlVand);
           
           // Gruppér standard lokationer
           const optgroupVin = document.createElement('optgroup');
@@ -827,6 +881,16 @@
               
               if (Array.isArray(allWines) && allWines.length > 0) {
                 wine = allWines.find(w => {
+                  // KRITISK: Tjek også kategori for at skelne mellem Vin og Øl & Vand
+                  const kategori = (w.kategori || w.type || '').toLowerCase();
+                  const isWineOlVand = kategori.includes('øl') || kategori.includes('vand') || kategori.includes('sodavand') ||
+                                       (w.vinId && w.vinId.toString().toLowerCase().startsWith('ol-')) ||
+                                       /^w\d{4,}$/i.test(w.vinId || '');
+                  
+                  // Match kun hvis kategori matcher
+                  if (isOlVand && !isWineOlVand) return false;
+                  if (!isOlVand && isWineOlVand) return false;
+                  
                   const matches = 
                     (w.vinId && w.vinId.toString() === trimmedCode) ||
                     (w.varenummer && w.varenummer.toString() === trimmedCode) ||
@@ -896,7 +960,7 @@
       } else {
         title.textContent = wine.navn || 'Indtast antal';
         warning.style.display = 'none';
-        const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
+        const locName = selectedLocationId ? (locations.find(l => l.id === selectedLocationId || l.name === selectedLocationId)?.name || selectedLocationId) : 'Ikke valgt';
         info.innerHTML = `
           <div><strong>VIN-ID:</strong> ${wine.vinId}</div>
           <div><strong>Lokation:</strong> ${locName}</div>
@@ -975,7 +1039,19 @@
         }
         
         // Brug samme locationId som blev sendt til backend
-        const finalLocationId = selectedLocationId ? parseInt(selectedLocationId) : (locations.length > 0 ? locations[0].id : null);
+        // Håndter både id (nummer) og navn (tekst)
+        let finalLocationId = null;
+        if (selectedLocationId) {
+          if (!isNaN(selectedLocationId)) {
+            finalLocationId = parseInt(selectedLocationId);
+          } else {
+            // Hvis det er et navn, find id eller brug navnet
+            const loc = locations.find(l => l.name === selectedLocationId);
+            finalLocationId = loc ? (loc.id || loc.name) : selectedLocationId;
+          }
+        } else if (locations.length > 0) {
+          finalLocationId = locations[0].id || locations[0].name;
+        }
         const locName = finalLocationId ? locations.find(l => l.id === finalLocationId)?.name : 'Ikke valgt';
         scannedWines.set(currentWine.vinId, {
           ...currentWine,
@@ -1000,7 +1076,7 @@
       if (scannedWines.size === 0) {
         if (!confirm('Ingen vine scannet. Afslutte?')) return;
       } else {
-        const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Ikke valgt';
+        const locName = selectedLocationId ? (locations.find(l => l.id === selectedLocationId || l.name === selectedLocationId)?.name || selectedLocationId) : 'Ikke valgt';
         if (!confirm(`${scannedWines.size} vine scannet. Lokation: ${locName}. Afslutte?`)) return;
       }
       
@@ -1066,7 +1142,7 @@
         doc.setFont(undefined, 'bold');
         doc.text(`SAMLET TOTAL: ${grandCount} vine, ${grandTotal.toFixed(2)} kr.`, 14, y);
         
-        const locName = selectedLocationId ? locations.find(l => l.id === selectedLocationId)?.name : 'Alle lokationer';
+        const locName = selectedLocationId ? (locations.find(l => l.id === selectedLocationId || l.name === selectedLocationId)?.name || selectedLocationId) : 'Alle lokationer';
         const reportData = {
           reportId: Date.now().toString(),
           date: toLocalDateTimeString(),

@@ -450,10 +450,11 @@ tr:hover {
   flex-direction: column;
   gap: 1rem;
   margin-top: 1rem;
-  padding-bottom: 0.5rem;
-  max-height: 600px;
+  padding-bottom: 2rem;
+  max-height: 70vh;
   overflow-y: auto;
   overflow-x: hidden;
+  min-height: 200px;
 }
 
 .label {
@@ -578,7 +579,9 @@ tr:hover {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 1rem;
+  padding-bottom: 2rem;
+  max-height: 70vh;
+  min-height: 200px;
 }
 
 .status-red {
@@ -648,12 +651,22 @@ tr:hover {
     flex-direction: column;
     display: flex;
     gap: 0.5rem;
+    max-height: none;
+    overflow: visible;
+    page-break-inside: auto;
   }
   
   .label {
     break-inside: avoid;
+    page-break-inside: avoid;
     width: 100%;
     max-width: 350px;
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Sikr at sidste label ikke bliver halv på ny side */
+  .label:last-child {
+    page-break-after: auto;
   }
 }
 
