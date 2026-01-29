@@ -535,48 +535,6 @@
         locationsLoaded = true;
         setTimeout(() => hideStatus(), 2000);
         startQRScannerWhenReady();
-        
-        locationsLoaded = true;
-        setTimeout(() => hideStatus(), 2000);
-        
-        // Start scanner når lokationer er klar
-        startQRScannerWhenReady();
-      } catch (e) {
-        console.error('❌ Fejl ved hentning af lokationer:', e);
-        // FALLBACK: Opret standard lokationer ved fejl
-        locations = [
-          { id: 1, name: 'Restaurant 1', category: 'Vin' },
-          { id: 2, name: 'Vinlager', category: 'Vin' },
-          { id: 3, name: 'Vinkøler', category: 'Vin' },
-          { id: 4, name: 'Bar 1', category: 'Øl & Vand' },
-          { id: 5, name: 'Køleren Øl & vand 1', category: 'Øl & Vand' }
-        ];
-        select.innerHTML = '<option value="">Alle lokationer</option>';
-        
-        // Gruppér standard lokationer
-        const optgroupVin = document.createElement('optgroup');
-        optgroupVin.label = '🍷 Vinlager';
-        locations.filter(l => l.category === 'Vin').forEach(loc => {
-          const o = document.createElement('option');
-          o.value = loc.id;
-          o.textContent = loc.name;
-          optgroupVin.appendChild(o);
-        });
-        select.appendChild(optgroupVin);
-        
-        const optgroupOlVand = document.createElement('optgroup');
-        optgroupOlVand.label = '🍺 Øl & vand';
-        locations.filter(l => l.category === 'Øl & Vand').forEach(loc => {
-          const o = document.createElement('option');
-          o.value = loc.id;
-          o.textContent = loc.name;
-          optgroupOlVand.appendChild(o);
-        });
-        select.appendChild(optgroupOlVand);
-        
-        showStatus('✅ Standard lokationer oprettet (fejl håndteret)', 'warning', 3000);
-        locationsLoaded = true;
-        startQRScannerWhenReady();
       }
     }
 
