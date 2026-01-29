@@ -273,11 +273,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // KRITISK: Vent lidt så auth.js er helt indlæst
     setTimeout(() => {
-      // Tjek login status
-      checkLoginStatus();
-      
-      setupNavigation();
-      
+    // Tjek login status
+    checkLoginStatus();
+    
+    setupNavigation();
+    
       // Sikr at login form handler er sat op
       const loginForm = document.getElementById('login-form');
       if (loginForm) {
@@ -335,11 +335,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
       
-      // Start auto-opdatering
+        // Start auto-opdatering
       if (typeof startAutoUpdate === 'function') {
         startAutoUpdate();
       }
-      // Tjek om der er ny rapport fra mobil
+        // Tjek om der er ny rapport fra mobil
       if (typeof checkForNewReport === 'function') {
         checkForNewReport();
       }
@@ -435,7 +435,7 @@ function checkLoginStatus() {
 // Handle login
 function handleLogin(event) {
   if (event) {
-    event.preventDefault();
+  event.preventDefault();
   }
   
   console.log('🔐 handleLogin() kaldt');
@@ -480,17 +480,17 @@ function handleLogin(event) {
   
   if (typeof authObj === 'undefined' || !authObj) {
     errorDiv.textContent = 'Fejl: Authentication system ikke tilgængelig. Vent venligst et øjeblik og prøv igen.';
-    errorDiv.style.display = 'block';
+      errorDiv.style.display = 'block';
     console.error('❌ auth ikke defineret! Prøver igen om 1 sekund...');
-    
-    // Prøv igen efter 1 sekund
-    setTimeout(() => {
+      
+      // Prøv igen efter 1 sekund
+      setTimeout(() => {
       console.log('🔄 Prøver login igen...');
       handleLogin(null); // Prøv igen uden event
-    }, 1000);
-    return;
-  }
-  
+      }, 1000);
+      return;
+    }
+    
   if (!authObj.login) {
     errorDiv.textContent = 'Fejl: Login funktion ikke tilgængelig. Genindlæs siden (Ctrl+Shift+R).';
     errorDiv.style.display = 'block';
@@ -525,7 +525,7 @@ function handleLogin(event) {
         if (typeof loadOlVand === 'function') {
           loadOlVand();
         }
-        // Start auto-opdatering efter login
+          // Start auto-opdatering efter login
         if (typeof startAutoUpdate === 'function') {
           startAutoUpdate();
         }
@@ -656,7 +656,7 @@ async function apiCall(endpoint, options = {}) {
     }
     
     const headers = {
-      'Content-Type': 'application/json',
+        'Content-Type': 'application/json',
       ...(rest.headers || {})
     };
     
@@ -690,7 +690,7 @@ async function apiCall(endpoint, options = {}) {
       
       if (contentType && contentType.includes('application/json')) {
         try {
-          const error = await response.json();
+      const error = await response.json();
           errorMessage = error.error || errorMessage;
         } catch (e) {
           // Hvis JSON parsing fejler, brug standard fejlbesked
@@ -705,7 +705,7 @@ async function apiCall(endpoint, options = {}) {
     // Tjek om responsen er JSON før parsing
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+    return await response.json();
     } else {
       // Hvis ikke JSON, returner tekst
       const text = await response.text();
@@ -1104,7 +1104,7 @@ async function loadWines() {
         // Vi har eksisterende data - BEHOLD det kun hvis backend er tom
         console.log(`⚠️ Backend tom/null, men beholder ${allWines.length} eksisterende vine.`);
         await saveWinesBackup(allWines); // Sikr backup er opdateret
-      } else {
+    } else {
         // Ingen data - prøv backup
         const n = await restoreWinesFromBackup();
         if (n > 0) {
@@ -1157,11 +1157,11 @@ async function loadWines() {
     // KRITISK: Opdater dashboard og tabel EFTER data er indlæst
     // Dette sikrer at opdateringer fra mobil vises korrekt
     if (typeof updateDashboard === 'function') {
-      updateDashboard();
+    updateDashboard();
       console.log('✅ Dashboard opdateret i loadWines()');
     }
     if (typeof populateFilters === 'function') {
-      populateFilters();
+    populateFilters();
     }
     if (typeof renderLager === 'function') {
       renderLager();
@@ -1249,7 +1249,7 @@ function updateDashboard() {
   
   // Generer QR-kode til scanner link
   if (typeof generateScannerQR === 'function') {
-    generateScannerQR();
+  generateScannerQR();
   }
 
   // Opdater dashboard elementer hvis de findes
@@ -1531,7 +1531,7 @@ function renderLager() {
     // Prøv at hente data én gang
     if (typeof loadWines === 'function') {
       console.log('🔄 Kalder loadWines()...');
-      loadWines().then(() => {
+    loadWines().then(() => {
         console.log('✅ loadWines() færdig, kalder renderLager() igen...');
         setTimeout(() => {
           if (allWines && allWines.length > 0) {
@@ -2174,7 +2174,7 @@ async function saveCount() {
     // Vent lidt så backend kan gemme, så hent opdateret data
     setTimeout(async () => {
       try {
-        await loadWines();
+    await loadWines();
       } catch (err) {
         // Hvis fejl, opdater alligevel med lokale data
         if (typeof updateDashboard === 'function') updateDashboard();
@@ -2247,13 +2247,13 @@ function setupFileInput() {
   // Backward compatibility - old file-input
   const fileInput = document.getElementById('file-input');
   if (fileInput) {
-    fileInput.addEventListener('change', (e) => {
-      const fileName = e.target.files[0]?.name || '';
-      const fileNameEl = document.getElementById('file-name');
-      if (fileNameEl) {
-        fileNameEl.textContent = fileName;
-      }
-    });
+  fileInput.addEventListener('change', (e) => {
+    const fileName = e.target.files[0]?.name || '';
+    const fileNameEl = document.getElementById('file-name');
+    if (fileNameEl) {
+      fileNameEl.textContent = fileName;
+    }
+  });
   }
 }
 
@@ -2577,7 +2577,7 @@ async function doImport(category = 'vin') {
     if (!response.ok) {
       let errorMessage = 'Import fejlede';
       try {
-        const error = await response.json();
+      const error = await response.json();
         errorMessage = error.error || error.message || `HTTP ${response.status}`;
       } catch (e) {
         // Hvis response ikke er JSON, prøv at læse som tekst
@@ -2610,14 +2610,14 @@ async function doImport(category = 'vin') {
     }
     if (resultsContent) {
       resultsContent.innerHTML = `
-        <div class="success-message">
-          <p><strong>Import gennemført!</strong></p>
+      <div class="success-message">
+        <p><strong>Import gennemført!</strong></p>
           <p>Importeret: ${result.importeret || 0}</p>
           <p>Opdateret: ${result.opdateret || 0}</p>
-          ${result.fejl && result.fejl.length > 0 ? `<p>Fejl: ${result.fejl.length}</p>` : ''}
+        ${result.fejl && result.fejl.length > 0 ? `<p>Fejl: ${result.fejl.length}</p>` : ''}
           <p style="margin-top: 10px; color: #4CAF50;"><strong>✅ Varelageret er nu opdateret!</strong></p>
-        </div>
-      `;
+      </div>
+    `;
     }
 
     // KRITISK: Opdater lokationer efter import (dynamiske lokationer fra Excel)
@@ -2724,9 +2724,9 @@ async function doImport(category = 'vin') {
         }
       }
     } else {
-      await loadWines();
+    await loadWines();
       if (typeof renderLager === 'function') {
-        renderLager();
+    renderLager();
       }
       if (typeof updateDashboard === 'function') {
         updateDashboard();
@@ -2818,7 +2818,7 @@ async function generateLabels(category = 'vin') {
   if (hyldeFilter) {
     filtered = filtered.filter(w => w.hylde === hyldeFilter);
   }
-  
+
   console.log(`✅ Filtreret til ${filtered.length} produkter`);
 
   const container = document.getElementById(containerId);
@@ -3113,7 +3113,7 @@ function checkForNewReport() {
   }
   
   // KRITISK: Opdater lager EFTER rapporter - vent længere så backend har tid
-  setTimeout(() => {
+    setTimeout(() => {
     if (typeof loadWines === 'function') {
       loadWines().then(() => {
         // FORCE opdater dashboard og tabel - uanset hvad
@@ -3216,9 +3216,9 @@ async function loadReportsHistory() {
       });
       
       // KRITISK: Gem ALTID i localStorage som backup (selv hvis backend har data)
-      localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
+        localStorage.setItem('reportsHistory', JSON.stringify(reportsHistory));
       console.log(`✅ Gemt ${reportsHistory.length} rapporter i localStorage backup`);
-    } else {
+      } else {
       // Backend tom eller ingen rapporter – brug localStorage backup
       console.log('⚠️ Backend tom - bruger localStorage backup');
       if (localReports.length > 0) {
@@ -3245,16 +3245,16 @@ async function loadReportsHistory() {
   } catch (error) {
     console.error('❌ Fejl ved indlæsning af rapport historik:', error);
     // Prøv at bruge localStorage som sidste fallback
-    const saved = localStorage.getItem('reportsHistory');
-    if (saved) {
+      const saved = localStorage.getItem('reportsHistory');
+      if (saved) {
       try {
         reportsHistory = JSON.parse(saved);
         console.log(`✅ Gendannet ${reportsHistory.length} rapporter fra localStorage efter fejl`);
         if (typeof updateLocationFilter === 'function') {
-          updateLocationFilter();
+    updateLocationFilter();
         }
         if (typeof renderReportsTable === 'function') {
-          renderReportsTable();
+    renderReportsTable();
         }
       } catch (parseError) {
         console.error('❌ Fejl ved parsing af localStorage:', parseError);
@@ -3485,17 +3485,17 @@ function renderReportsTable() {
         else if (dateStr.includes('.')) {
           const dateOnly = dateStr.replace(/,.*$/, ''); // Fjern tid del
           const parts = dateOnly.split('.');
-          if (parts.length === 3) {
+        if (parts.length === 3) {
             // Format: dd.mm.yyyy eller d.m.yyyy
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10) - 1;
             const year = parseInt(parts[2], 10);
             reportDate = new Date(year, month, day);
-          } else {
+        } else {
             reportDate = new Date(dateStr);
           }
         }
-        // Fallback til standard parsing
+          // Fallback til standard parsing
         else {
           reportDate = new Date(r.date);
         }
@@ -3588,7 +3588,7 @@ function renderReportsTable() {
   
   // Filtrer efter arkiveret status
   if (archivedFilter === 'active') {
-    filtered = filtered.filter(r => !r.archived);
+  filtered = filtered.filter(r => !r.archived);
   } else if (archivedFilter === 'archived') {
     filtered = filtered.filter(r => r.archived);
   }
@@ -3700,7 +3700,7 @@ async function generateFullReportPDF(report) {
     if (allWines && Array.isArray(allWines) && allWines.length > 0) {
       console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
       wines = allWines;
-    } else {
+  } else {
       console.warn('⚠️ allWines er tom - prøver backend...');
       try {
         wines = await apiCall('/api/reports/lager');
@@ -3968,7 +3968,7 @@ async function generateFullReportPDFForDownload(report) {
     if (allWines && Array.isArray(allWines) && allWines.length > 0) {
       console.log('✅ Bruger allWines direkte:', allWines.length, 'vine');
       wines = allWines;
-    } else {
+  } else {
       console.warn('⚠️ allWines er tom - prøver backend...');
       wines = await apiCall('/api/reports/lager');
     }
@@ -4830,7 +4830,7 @@ async function generateVærdiReport(category = 'vin') {
           return !isOlVand;
         });
       } else {
-        const report = await apiCall('/api/reports/værdi');
+    const report = await apiCall('/api/reports/værdi');
         wines = report.wines || [];
       }
     }
@@ -6161,7 +6161,7 @@ async function generateLavStatusRapportOlVand() {
   window.populateLabelFiltersOlVand = populateLabelFiltersOlVand;
   window.applyFilterOlVand = applyFilterOlVand;
   window.clearFilterOlVand = clearFilterOlVand;
-  
+
   window.handleLogin = handleLogin;
   window.handleLogout = handleLogout;
   window.showPasswordReset = showPasswordReset;
@@ -6283,20 +6283,20 @@ function generateScannerQR() {
   
   // Vis link
   if (linkText) {
-    linkText.textContent = scannerUrl;
+  linkText.textContent = scannerUrl;
     linkText.style.wordBreak = 'break-all';
   }
   
   // Generer QR-kode hvis QRCode biblioteket er tilgængelig
   if (typeof QRCode !== 'undefined') {
     try {
-      qrContainer.innerHTML = '';
-      new QRCode(qrContainer, {
-        text: scannerUrl,
-        width: 200,
-        height: 200,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+      text: scannerUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
         correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 1
       });
       console.log('✅ QR-kode genereret');

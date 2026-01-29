@@ -26,7 +26,7 @@
       font-weight: 700; font-size: 1em; cursor: pointer;
       z-index: 20; text-decoration: none; display: block;
     }
-    .scanner-header h1 {
+      .scanner-header h1 {
       margin: 0; font-size: 1.3em; font-weight: 600;
     }
     .location-selector {
@@ -88,10 +88,10 @@
       border: 3px solid #4CAF50; border-radius: 12px; font-weight: 600;
     }
     .modal-buttons { display: flex; gap: 10px; }
-    .btn-cancel, .btn-save-modal {
+      .btn-cancel, .btn-save-modal {
       flex: 1; padding: 18px; font-size: 1.4em; border: none;
       border-radius: 12px; font-weight: 600; cursor: pointer;
-    }
+      }
     .btn-cancel { background: #6c757d; color: white; }
     .btn-save-modal { background: #4CAF50; color: white; }
     .status-message {
@@ -115,7 +115,7 @@
         <select id="location-select">
           <option value="">Alle lokationer</option>
         </select>
-      </div>
+    </div>
     </div>
     <div class="video-container">
       <video id="qr-video" autoplay playsinline muted></video>
@@ -243,7 +243,7 @@
       
       try {
         const headers = {
-          'Content-Type': 'application/json',
+            'Content-Type': 'application/json',
           ...(options.headers || {})
         };
         
@@ -755,7 +755,7 @@
     }
     
     // SCAN FRAME - MED DEBOUNCE OG VALIDERING
-    function scanFrame() {
+        function scanFrame() {
       // KRITISK: Tjek om scanning stadig er aktiv
       if (!qrScanning) {
         console.log('⚠️ qrScanning er false - stopper scanning');
@@ -791,17 +791,17 @@
       // Tjek om video er klar
       if (video.readyState < video.HAVE_METADATA) {
         // Video ikke klar endnu - prøv igen snart
-        scanAnimationFrame = requestAnimationFrame(scanFrame);
+              scanAnimationFrame = requestAnimationFrame(scanFrame);
         return;
-      }
+            }
       
       if (video.readyState < video.HAVE_ENOUGH_DATA) {
         // Video har ikke nok data endnu
         scanAnimationFrame = requestAnimationFrame(scanFrame);
-        return;
-      }
-      
-      try {
+            return;
+          }
+          
+          try {
         const width = video.videoWidth;
         const height = video.videoHeight;
         if (!width || !height || width === 0 || height === 0) {
@@ -812,7 +812,7 @@
         
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
         
@@ -822,7 +822,7 @@
           return;
         }
         
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code && code.data && code.data.trim()) {
           const codeData = code.data.trim();
           
@@ -853,7 +853,7 @@
           handleScan(codeData);
           
           // Fortsæt scanning - ikke stop
-          scanAnimationFrame = requestAnimationFrame(scanFrame);
+            scanAnimationFrame = requestAnimationFrame(scanFrame);
           return;
         }
       } catch (err) {
@@ -864,7 +864,7 @@
       // Fortsæt scanning - ALTID hvis qrScanning er true
       if (qrScanning) {
         scanAnimationFrame = requestAnimationFrame(scanFrame);
-      } else {
+        } else {
         console.log('⚠️ qrScanning er false - stopper scan loop');
         if (scanAnimationFrame) {
           cancelAnimationFrame(scanAnimationFrame);
@@ -872,7 +872,7 @@
         }
       }
     }
-
+    
     // HÅNDTER SCAN
     async function handleScan(codeData) {
       // KRITISK FIX: Scanner skal håndtere både VIN og Øl & Vand
@@ -1013,13 +1013,13 @@
       input.focus();
       input.select();
     }
-
+    
     function closeModal() {
       const modal = document.getElementById('quantity-modal');
       modal.classList.remove('show');
       currentWine = null;
     }
-
+    
     // GEM ANTAL
     async function saveQuantity() {
       const input = document.getElementById('quantity-input');
@@ -1053,7 +1053,7 @@
             
             // KRITISK FIX: Send nytAntal som tal, ikke string
             const response = await apiCall(`/api/count/${currentWine.vinId}`, {
-              method: 'POST',
+            method: 'POST',
               body: JSON.stringify(requestBody)
             });
             
@@ -1110,7 +1110,7 @@
         alert(`Fejl: ${error.message}`);
       }
     }
-
+    
     // AFSLUT OPTÆLLING
     async function finishCounting() {
       if (scannedWines.size === 0) {
@@ -1171,7 +1171,7 @@
             const varenummer = w.varenummer || w.vinId || '';
             doc.text(`* ${varenummer} | ${w.navn || ''} | ${w.antal || 0} | ${pris.toFixed(2)} kr`, 14, y);
             doc.setFont(undefined, 'normal');
-            y += 6;
+          y += 6;
           });
           y += 5;
         });
