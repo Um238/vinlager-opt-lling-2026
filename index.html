@@ -1,23 +1,15 @@
 <!DOCTYPE html>
 <html lang="da">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#4A90E2">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Vinlager">
-  <link rel="apple-touch-icon" href="icon-app.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vinlager Optælling 2026</title>
 
-  <title>CellarCount 2026 - Vinlager Optælling</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
 
-  <link rel="stylesheet" href="styles.css?v=33">
-  <link rel="manifest" href="manifest-app.json">
-
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="styles.css?v=99" />
 
   <!-- Eksterne libs -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -26,66 +18,52 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 
-<body>
+<body style="margin:0;padding:0;">
 
-<script>
-  // PWA: register service worker
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    });
-  }
+<!-- ================= LOGIN – VISER ALTID ================= -->
+<div
+  id="login-screen"
+  class="login-screen"
+  style="
+    display:flex !important;
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    background:#ffffff;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+  "
+>
+  <h1>Vinlager Login</h1>
 
-  let deferredPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-  });
+  <input id="login-username" placeholder="Brugernavn" />
+  <input id="login-password" type="password" placeholder="Kodeord" />
 
-  async function promptInstall() {
-    if (!deferredPrompt) {
-      alert('Install/genvej: Åbn browser-menuen og vælg "Tilføj til startskærm".');
-      return;
-    }
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    deferredPrompt = null;
-  }
-  window.promptInstall = promptInstall;
-</script>
+  <button onclick="handleLogin()">Log ind</button>
 
-<!-- LOGIN -->
-<div id="login-screen" class="login-screen" style="display:flex;">
-  <!-- login content uændret -->
+  <p id="login-error" style="color:red;"></p>
 </div>
 
-<header id="main-header" style="display:none;">
-  <!-- header uændret -->
-</header>
+<!-- ================= RESTEN AF APP (SKJULT INDTIL LOGIN) ================= -->
+<header id="main-header" style="display:none;"></header>
+<main id="main-content" style="display:none;"></main>
 
-<main id="main-content" style="display:none;">
-  <!-- ALT INDHOLD UÆNDRET -->
-</main>
-
-<!-- Debug / cache clear -->
-<script>
-  const CACHE_VERSION = 'v26_' + Date.now();
-  console.log('INDEX LOAD', CACHE_VERSION);
-
-  if ('caches' in window) {
-    caches.keys().then(names => {
-      names.forEach(n => caches.delete(n));
-    });
-  }
-</script>
-
-<!-- ✅ RETTEDE SCRIPT TAGS -->
-<script src="config.js?v=29" defer></script>
-<script src="auth.js?v=28" defer></script>
+<!-- ================= CORE SCRIPTS ================= -->
+<script src="config.js?v=99" defer></script>
+<script src="auth.js?v=99" defer></script>
 <script src="app.js?v=108" defer></script>
 
 <script>
-  console.log('All scripts loaded');
+  console.log('INDEX LOAD OK');
+
+  // Tving login til at være synligt indtil auth selv skjuler det
+  document.addEventListener('DOMContentLoaded', () => {
+    const login = document.getElementById('login-screen');
+    if (login) {
+      login.style.display = 'flex';
+    }
+  });
 </script>
 
 </body>
