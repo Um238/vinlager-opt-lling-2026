@@ -1,70 +1,745 @@
 <!DOCTYPE html>
 <html lang="da">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vinlager Optælling 2026</title>
-
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-
-  <link rel="stylesheet" href="styles.css?v=99" />
-
-  <!-- Eksterne libs -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#4A90E2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Vinlager">
+  <link rel="apple-touch-icon" href="icon-app.png">
+  <title>CellarCount 2026 - Vinlager Optælling</title>
+  <link rel="stylesheet" href="styles.css?v=33">
+  <link rel="manifest" href="manifest-app.json">
+      <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+      <meta http-equiv="Pragma" content="no-cache">
+      <meta http-equiv="Expires" content="0">
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
-
-<body style="margin:0;padding:0;">
-
-<!-- ================= LOGIN – VISER ALTID ================= -->
-<div
-  id="login-screen"
-  class="login-screen"
-  style="
-    display:flex !important;
-    position:fixed;
-    inset:0;
-    z-index:9999;
-    background:#ffffff;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-  "
->
-  <h1>Vinlager Login</h1>
-
-  <input id="login-username" placeholder="Brugernavn" />
-  <input id="login-password" type="password" placeholder="Kodeord" />
-
-  <button onclick="handleLogin()">Log ind</button>
-
-  <p id="login-error" style="color:red;"></p>
-</div>
-
-<!-- ================= RESTEN AF APP (SKJULT INDTIL LOGIN) ================= -->
-<header id="main-header" style="display:none;"></header>
-<main id="main-content" style="display:none;"></main>
-
-<!-- ================= CORE SCRIPTS ================= -->
-<script src="config.js?v=99" defer></script>
-<script src="auth.js?v=99" defer></script>
-<script src="app.js?v=108" defer></script>
-
-<script>
-  console.log('INDEX LOAD OK');
-
-  // Tving login til at være synligt indtil auth selv skjuler det
-  document.addEventListener('DOMContentLoaded', () => {
-    const login = document.getElementById('login-screen');
-    if (login) {
-      login.style.display = 'flex';
+<body>
+  <script>
+    // PWA: register service worker (required for "Add to Home Screen" on Android/Chrome)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
     }
-  });
-</script>
 
+    // Optional: show install prompt button on Android (Chrome/Edge)
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+    async function promptInstall() {
+      if (!deferredPrompt) {
+        alert('Install/genvej: Åbn browser-menuen og vælg \"Tilføj til startskærm\".');
+        return;
+      }
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    }
+    window.promptInstall = promptInstall;
+  </script>
+  <!-- QR-kode Modal -->
+  <div id="scanner-qr-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; position: relative;">
+      <button onclick="closeScannerQRModal()" style="position: absolute; top: 10px; right: 10px; background: #f44336; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.2em;">×</button>
+      <h3 style="margin-top: 0;">📱 Få scanner-link på din telefon</h3>
+      <p>Scan QR-koden nedenfor med din telefon for at åbne scanneren direkte:</p>
+      <div id="scanner-qr-container" style="text-align: center; margin: 20px 0;">
+        <div id="scanner-qr-code" style="display: inline-block; padding: 20px; background: white; border-radius: 8px;"></div>
+      </div>
+      <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
+        <strong>Direkte link:</strong><br>
+        <code id="scanner-link-text" style="background: #f5f5f5; padding: 5px 10px; border-radius: 4px; display: inline-block; margin-top: 5px; word-break: break-all; font-size: 0.85em;"></code>
+      </p>
+      <button class="btn-secondary" onclick="copyScannerLink()" style="margin-top: 10px;">📋 Kopiér link</button>
+    </div>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen" style="display: flex;">
+    <div class="login-card">
+      <h2>🍷 CellarCount 2026</h2>
+      <h3>Log ind</h3>
+      <div id="login-error" class="error-message" style="display: none;"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label>Brugernavn:</label>
+          <input type="text" id="login-username" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>Password:</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%;">Log ind</button>
+      </form>
+      <div style="margin-top: 1rem; text-align: center;">
+        <a href="#" onclick="showPasswordReset(); return false;" style="color: #2563eb; text-decoration: none;">Glemt password?</a>
+      </div>
+    </div>
+  </div>
+
+  <header id="main-header" style="display: none;">
+    <h1>🍷 CellarCount 2026</h1>
+    <nav>
+      <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+      <button class="nav-btn" data-page="lager">Vinlager</button>
+      <button class="nav-btn" data-page="ol-vand-lager">Lager ØL & vand</button>
+      <button class="nav-btn" data-page="optælling">Optælling</button>
+      <button class="nav-btn" data-page="import">Import</button>
+      <button class="nav-btn" data-page="labels">Labels</button>
+      <button class="nav-btn" data-page="rapporter">Rapporter</button>
+      <button class="nav-btn" data-page="admin" id="admin-nav-btn" style="display: none;">Admin</button>
+      <a href="scanner.html" class="nav-btn" style="text-decoration: none; display: inline-block;">📱 Mobil Scanner</a>
+      <button class="nav-btn" onclick="handleLogout()" style="background: #dc2626;">Log ud</button>
+    </nav>
+  </header>
+
+  <main id="main-content" style="display: none;">
+    <!-- Dashboard -->
+    <section id="dashboard" class="page active">
+      <div class="card">
+        <h2>Dashboard</h2>
+        
+        <h3 style="margin-top: 20px; margin-bottom: 15px; color: #333;">🍷 Vinlager</h3>
+        <div class="stats-grid">
+          <div class="stat-card clickable" onclick="showVineOversigt('alle')">
+            <div class="stat-label">Antal vine</div>
+            <div class="stat-value" id="stat-ant-vine">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Samlet lagerværdi</div>
+            <div class="stat-value" id="stat-værdi">0 kr.</div>
+          </div>
+          <div class="stat-card clickable" onclick="showVineOversigt('lavt')">
+            <div class="stat-label">Lavt lager</div>
+            <div class="stat-value warning" id="stat-lavt">0</div>
+          </div>
+        </div>
+        
+        <h3 style="margin-top: 30px; margin-bottom: 15px; color: #333;">🍺 Øl & Vand</h3>
+        <div class="stats-grid">
+          <div class="stat-card clickable" onclick="showOlVandOversigt('alle')">
+            <div class="stat-label">Antal Øl & vand</div>
+            <div class="stat-value" id="stat-ant-ol-vand">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Samlet lagerværdi</div>
+            <div class="stat-value" id="stat-værdi-ol-vand">0 kr.</div>
+          </div>
+          <div class="stat-card clickable" onclick="showOlVandOversigt('lavt')">
+            <div class="stat-label">Lavt lager</div>
+            <div class="stat-value warning" id="stat-lavt-ol-vand">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vinlager -->
+    <section id="lager" class="page">
+      <div class="card">
+        <h2>Vinlageroversigt</h2>
+        <div class="filter-bar">
+          <select id="filter-lokation">
+            <option value="">Alle lokationer</option>
+          </select>
+          <select id="filter-reol">
+            <option value="">Alle reoler</option>
+          </select>
+          <select id="filter-hylde">
+            <option value="">Alle hylder</option>
+          </select>
+          <button class="btn-secondary" onclick="applyFilter()">Filtrer</button>
+          <button class="btn-secondary" onclick="clearFilter()">Ryd</button>
+          <button class="btn-primary" onclick="if(typeof loadWines === 'function'){loadWines().then(()=>{updateDashboard();renderLager();showSuccess('Lager opdateret');});}" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 10px;">🔄 Opdater</button>
+        </div>
+        <div class="table-container">
+          <table id="lager-table">
+            <thead>
+              <tr>
+                <th>VIN-ID</th>
+                <th>Varenummer</th>
+                <th>Navn</th>
+                <th>Type</th>
+                <th>Land</th>
+                <th>Region</th>
+                <th>Årgang</th>
+                <th>Lokation</th>
+                <th>Reol</th>
+                <th>Hylde</th>
+                <th class="text-right">Antal</th>
+                <th class="text-right">Min. Antal</th>
+                <th class="text-right">Indkøbspris</th>
+                <th>Billede</th>
+              </tr>
+            </thead>
+            <tbody id="lager-tbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lager ØL & vand -->
+    <section id="ol-vand-lager" class="page">
+      <div class="card">
+        <h2>Lageroversigt Øl & Vand</h2>
+        <div class="filter-bar">
+          <select id="filter-lokation-ol-vand">
+            <option value="">Alle lokationer</option>
+          </select>
+          <select id="filter-reol-ol-vand">
+            <option value="">Alle reoler</option>
+          </select>
+          <select id="filter-hylde-ol-vand">
+            <option value="">Alle hylder</option>
+          </select>
+          <button class="btn-secondary" onclick="applyFilterOlVand()">Filtrer</button>
+          <button class="btn-secondary" onclick="clearFilterOlVand()">Ryd</button>
+          <button class="btn-primary" onclick="if(typeof loadOlVand === 'function'){loadOlVand().then(()=>{updateDashboardOlVand();renderOlVandLager();showSuccess('Lager opdateret');});}" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 10px;">🔄 Opdater</button>
+        </div>
+        <div class="table-container">
+          <table id="ol-vand-lager-table">
+            <thead>
+              <tr>
+                <th>VIN-ID</th>
+                <th>Varenummer</th>
+                <th>Navn</th>
+                <th>Type</th>
+                <th>Kategori</th>
+                <th>Lokation</th>
+                <th>Reol</th>
+                <th>Hylde</th>
+                <th class="text-right">Antal</th>
+                <th class="text-right">Min. Antal</th>
+                <th class="text-right">Indkøbspris</th>
+                <th>Billede</th>
+              </tr>
+            </thead>
+            <tbody id="ol-vand-lager-tbody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Optælling -->
+    <section id="optælling" class="page">
+      <div class="card">
+        <h2>QR-kode Optælling</h2>
+        <div class="scan-container">
+          <div class="scan-section">
+            <label>Scan eller indtast QR-kode (VIN-ID eller Varenummer):</label>
+            <div style="position: relative;">
+              <input type="text" id="scan-input" placeholder="VIN-0001 eller W001" autofocus>
+              <div id="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 2px;"></div>
+            </div>
+            <button class="btn-primary" onclick="scanQR()">Søg vin</button>
+            <button class="btn-secondary" id="start-camera-btn" onclick="startQRScanner()" style="margin-left: 10px;">📷 Start kamera scanner</button>
+            <video id="qr-video" style="width: 100%; max-width: 400px; display: none; margin-top: 10px;"></video>
+            <canvas id="qr-canvas" style="display: none;"></canvas>
+          </div>
+
+          <div id="wine-details" class="wine-details" style="display: none;">
+            <h3 id="wine-navn"></h3>
+            <div class="wine-info">
+              <div><strong>VIN-ID:</strong> <span id="wine-vinId"></span></div>
+              <div><strong>Type:</strong> <span id="wine-type"></span></div>
+              <div><strong>Land:</strong> <span id="wine-land"></span></div>
+              <div><strong>Region:</strong> <span id="wine-region"></span></div>
+              <div><strong>Årgang:</strong> <span id="wine-årgang"></span></div>
+              <div><strong>Reol:</strong> <span id="wine-reol"></span> | <strong>Hylde:</strong> <span id="wine-hylde"></span></div>
+              <div><strong>Nuværende antal:</strong> <span id="wine-antal" class="big-number"></span></div>
+              <div id="wine-billede-container"></div>
+            </div>
+
+            <div class="count-controls">
+              <h4>Opdater antal:</h4>
+              <div class="count-buttons">
+                <button class="btn-count" onclick="updateCount(-1)">-1</button>
+                <button class="btn-count" onclick="updateCount(-5)">-5</button>
+                <input type="number" id="count-input" placeholder="Direkte antal" style="width: 150px; padding: 10px;">
+                <button class="btn-count" onclick="updateCount(5)">+5</button>
+                <button class="btn-count" onclick="updateCount(1)">+1</button>
+              </div>
+              <button class="btn-primary" onclick="saveCount()">Gem antal</button>
+              <button class="btn-secondary" onclick="finishCounting()" style="margin-top: 10px; width: 100%;">✅ Afslut optælling og generer rapport</button>
+              <div id="count-status"></div>
+            </div>
+          </div>
+
+          <div id="scan-error" class="error-message" style="display: none;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Import -->
+    <section id="import" class="page">
+      <div class="card">
+        <h2>Import CSV/Excel</h2>
+        
+        <!-- Import sektioner side om side -->
+        <div class="import-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        
+        <!-- Import Vin -->
+        <div class="import-section" style="padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #2d5016;">🍷 Import Vin</h3>
+          <div style="margin-bottom: 20px; padding: 15px; background: #e6f7e6; border-radius: 8px; border: 2px solid #4CAF50;">
+            <h4 style="margin-top: 0; color: #2d5016;">📥 Download Excel Skabelon</h4>
+            <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
+            <button class="btn-primary" onclick="downloadTemplate('vin')" style="background: #4CAF50;">
+              📥 Download vinlager_skabelon.xlsx
+            </button>
+          </div>
+          <p>Vælg import-mode:</p>
+          <div class="radio-group">
+            <label><input type="radio" name="import-mode-vin" value="opdater" checked> Opdatér eksisterende vine (anbefalet)</label>
+            <label><input type="radio" name="import-mode-vin" value="tilføj"> Tilføj nye vine (spring eksisterende over)</label>
+            <label><input type="radio" name="import-mode-vin" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
+          </div>
+
+          <div class="file-upload">
+            <label for="file-input-vin" class="file-label">
+              <span>Vælg CSV eller Excel fil</span>
+              <input type="file" id="file-input-vin" accept=".csv,.xlsx,.xls" style="display: none;" data-category="vin">
+            </label>
+            <span id="file-name-vin"></span>
+          </div>
+
+          <button class="btn-primary" onclick="doImport('vin')">Start import vin</button>
+
+          <div id="import-results-vin" style="display: none;">
+            <h4>Import resultat:</h4>
+            <div id="import-results-content-vin"></div>
+          </div>
+        </div>
+
+        <!-- Import Øl & Vand -->
+        <div class="import-section" style="padding: 20px; border: 2px solid #2196F3; border-radius: 8px; min-width: 0;">
+          <h3 style="margin-top: 0; color: #1565C0;">🍺 Import Øl & Vand</h3>
+          <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196F3;">
+            <h4 style="margin-top: 0; color: #1565C0;">📥 Download Excel Skabelon</h4>
+            <p style="margin: 10px 0;">Download en tom Excel skabelon med korrekt kolonne rækkefølge og encoding (UTF-8).</p>
+            <button class="btn-primary" onclick="downloadTemplate('ol-vand')" style="background: #2196F3;">
+              📥 Download ol_vand_skabelon.xlsx
+            </button>
+          </div>
+          <p>Vælg import-mode:</p>
+          <div class="radio-group">
+            <label><input type="radio" name="import-mode-ol-vand" value="opdater" checked> Opdatér eksisterende Øl & Vand (anbefalet)</label>
+            <label><input type="radio" name="import-mode-ol-vand" value="tilføj"> Tilføj nye Øl & Vand (spring eksisterende over)</label>
+            <label><input type="radio" name="import-mode-ol-vand" value="overskriv"> ⚠️ Overskriv hele lageret (sletter alt eksisterende!)</label>
+          </div>
+
+          <div class="file-upload">
+            <label for="file-input-ol-vand" class="file-label">
+              <span>Vælg CSV eller Excel fil</span>
+              <input type="file" id="file-input-ol-vand" accept=".csv,.xlsx,.xls" style="display: none;" data-category="ol-vand">
+            </label>
+            <span id="file-name-ol-vand"></span>
+          </div>
+
+          <button class="btn-primary" onclick="doImport('ol-vand')" style="background: #2196F3;">Start import Øl & Vand</button>
+
+          <div id="import-results-ol-vand" style="display: none;">
+            <h4>Import resultat:</h4>
+            <div id="import-results-content-ol-vand"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Labels -->
+    <section id="labels" class="page">
+      <div class="card">
+        <h2 class="sticky-header">Print Labels</h2>
+        
+        <!-- Labels sektioner side om side -->
+        <div class="import-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+        
+        <!-- Labels Vin -->
+        <div style="padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
+          <h3 style="margin-top: 0; color: #2d5016;">🍷 Labels Vin</h3>
+          <div class="filter-bar">
+            <select id="label-lokation">
+              <option value="">Alle lokationer</option>
+            </select>
+            <select id="label-reol">
+              <option value="">Alle reoler</option>
+            </select>
+            <select id="label-hylde">
+              <option value="">Alle hylder</option>
+            </select>
+            <button class="btn-secondary" onclick="generateLabels('vin')">Generer labels</button>
+            <button class="btn-print" onclick="printLabels('vin')">🖨️ Print labels</button>
+          </div>
+          <div id="labels-container" class="labels-container"></div>
+        </div>
+
+        <!-- Labels Øl & Vand -->
+        <div style="padding: 20px; border: 2px solid #2196F3; border-radius: 8px; min-width: 0;">
+          <h3 style="margin-top: 0; color: #1565C0;">🍺 Labels Øl & Vand</h3>
+          <div class="filter-bar">
+            <select id="label-lokation-ol-vand">
+              <option value="">Alle lokationer</option>
+            </select>
+            <select id="label-reol-ol-vand">
+              <option value="">Alle reoler</option>
+            </select>
+            <select id="label-hylde-ol-vand">
+              <option value="">Alle hylder</option>
+            </select>
+            <button class="btn-secondary" onclick="generateLabels('ol-vand')">Generer labels</button>
+            <button class="btn-print" onclick="printLabels('ol-vand')" style="background: #2196F3;">🖨️ Print labels</button>
+          </div>
+          <div id="labels-container-ol-vand" class="labels-container"></div>
+        </div>
+        
+        </div>
+      </div>
+    </section>
+
+    <!-- Rapporter -->
+    <section id="rapporter" class="page">
+      <div class="card">
+        <h2>Rapporter</h2>
+        <p style="color: #666; margin-bottom: 1rem;">Se og administrer rapporter og arkiverede rapporter.</p>
+        
+        <!-- Backup Status -->
+        <div id="backup-status" style="display: none; background: #e6f7e6; color: #060; padding: 8px 12px; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9em;">
+          💾 Backup: 0 rapporter gemt lokalt
+        </div>
+        
+        <!-- Gendan lager fra backup -->
+        <div style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button class="btn-secondary" onclick="gendanLagerFraBackup()" style="background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            🔄 Gendan lager fra backup
+          </button>
+          <button class="btn-secondary" onclick="downloadLagerBackupCSV()" style="background: #2196F3; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📥 Download lager backup (CSV)
+          </button>
+          <button class="btn-secondary" onclick="hentRapporterFraBackup()" style="background: #FF9800; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+            📋 Hent rapporter fra backup
+          </button>
+          <span id="backup-actions-msg" style="font-size: 0.9em; color: #666;"></span>
+        </div>
+        
+        <!-- Filtre -->
+        <div class="filter-bar" style="margin-bottom: 1rem;">
+          <label style="margin-right: 1rem;">
+            <strong>Vælg periode:</strong>
+            <select id="report-period" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="all">Alle Rapporter</option>
+              <option value="today">I dag</option>
+              <option value="week">Sidste uge</option>
+              <option value="thisMonth">Denne måned</option>
+              <option value="lastMonth">Sidste måned</option>
+            </select>
+          </label>
+          <label style="margin-right: 1rem;">
+            <strong>Vælg lokation:</strong>
+            <select id="report-location" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="all">Alle</option>
+            </select>
+          </label>
+          <label style="display: flex; align-items: center; margin-left: 1rem;">
+            <strong>Vis:</strong>
+            <select id="report-archived-filter" onchange="renderReportsTable()" style="margin-left: 0.5rem; padding: 0.5rem;">
+              <option value="active">Kun aktive</option>
+              <option value="archived">Kun arkiverede</option>
+              <option value="all">Alle</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- Generer nye rapporter - VIN -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+          <h3 style="margin-bottom: 0.5rem;">🍷 Generer ny rapport - VIN:</h3>
+          <button class="btn-primary" onclick="generateLagerReport('vin')" style="margin-right: 0.5rem;">Lagerrapport (PDF)</button>
+          <button class="btn-primary" onclick="generateVærdiReport('vin')">Værdirapport (PDF)</button>
+        </div>
+
+        <!-- Generer nye rapporter - ØL & VAND -->
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: #e3f2fd; border-radius: 4px;">
+          <h3 style="margin-bottom: 0.5rem;">🍺 Generer ny rapport - Øl & Vand:</h3>
+          <button class="btn-primary" onclick="generateLagerReport('ol-vand')" style="margin-right: 0.5rem; background: #2196F3;">Lagerrapport (PDF)</button>
+          <button class="btn-primary" onclick="generateVærdiReport('ol-vand')" style="background: #2196F3;">Værdirapport (PDF)</button>
+          <button class="btn-primary" onclick="generateLavStatusRapportOlVand()" style="background: #2196F3; margin-left: 0.5rem;">Lav status rapport</button>
+        </div>
+
+        <!-- Rapport liste -->
+        <div id="reports-list">
+          <div style="margin-bottom: 0.5rem;">
+            <strong>Vis alle rapporter:</strong>
+            <button class="btn-secondary" onclick="generateLavStatusRapport()" style="margin-left: 0.5rem;">Lav status rapport (Vin)</button>
+            <button class="btn-secondary" onclick="generateLavStatusRapportOlVand()" style="margin-left: 0.5rem; background: #2196F3;">Lav status rapport (Øl & Vand)</button>
+          </div>
+          
+          <table id="reports-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                <th style="padding: 0.75rem; text-align: left;">Dato / Tid</th>
+                <th style="padding: 0.75rem; text-align: left;">Handling (Rapport navn)</th>
+                <th style="padding: 0.75rem; text-align: left;">Vare / Note</th>
+                <th style="padding: 0.75rem; text-align: left;">Antal varer</th>
+                <th style="padding: 0.75rem; text-align: left;">Lokation</th>
+                <th style="padding: 0.75rem; text-align: left;">Handlinger</th>
+              </tr>
+            </thead>
+            <tbody id="reports-tbody">
+              <!-- Rapporter indlæses her -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin -->
+    <section id="admin" class="page">
+      <div class="card">
+        <h2>Admin Panel</h2>
+        
+        <!-- Admin Tabs -->
+        <div class="admin-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #ddd;">
+          <button class="admin-tab-btn active" data-tab="users" onclick="switchAdminTab('users')">👥 Brugere</button>
+          <button class="admin-tab-btn" data-tab="logs" onclick="switchAdminTab('logs')">📋 Log</button>
+          <button class="admin-tab-btn" data-tab="password-reset" onclick="switchAdminTab('password-reset')">🔐 Password Reset</button>
+          <button class="admin-tab-btn" data-tab="system" onclick="switchAdminTab('system')">⚙️ System</button>
+        </div>
+
+        <!-- Brugere Tab -->
+        <div id="admin-tab-users" class="admin-tab-content">
+          <h3>Brugeradministration</h3>
+          
+          <!-- Opret ny bruger -->
+          <div style="margin-bottom: 2rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <h4>Opret ny bruger</h4>
+            <form id="create-user-form" onsubmit="handleCreateUser(event); return false;">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <label>Brugernavn: *</label>
+                  <input type="text" id="new-username" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Password: *</label>
+                  <input type="password" id="new-password" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Email: *</label>
+                  <input type="email" id="new-email" required style="width: 100%; padding: 0.5rem;">
+                </div>
+                <div>
+                  <label>Rolle: *</label>
+                  <select id="new-role" required style="width: 100%; padding: 0.5rem;">
+                    <option value="user">Bruger (Optælling)</option>
+                    <option value="overtjener">Overtjener</option>
+                    <option value="direktør">Direktør</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary">Opret bruger</button>
+              <div id="create-user-message" style="margin-top: 0.5rem;"></div>
+            </form>
+          </div>
+
+          <!-- Brugeroversigt -->
+          <div>
+            <h4>Brugeroversigt</h4>
+            <div class="table-container">
+              <table id="users-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                    <th style="padding: 0.75rem; text-align: left;">Brugernavn</th>
+                    <th style="padding: 0.75rem; text-align: left;">Email</th>
+                    <th style="padding: 0.75rem; text-align: left;">Rolle</th>
+                    <th style="padding: 0.75rem; text-align: left;">Oprettet</th>
+                    <th style="padding: 0.75rem; text-align: left;">Handlinger</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody">
+                  <!-- Brugere indlæses her -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Log Tab -->
+        <div id="admin-tab-logs" class="admin-tab-content" style="display: none;">
+          <h3>Activity Log</h3>
+          
+          <!-- Log filtre -->
+          <div class="filter-bar" style="margin-bottom: 1rem;">
+            <select id="log-filter-user" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+              <option value="">Alle brugere</option>
+            </select>
+            <select id="log-filter-action" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+              <option value="">Alle handlinger</option>
+              <option value="login">Login</option>
+              <option value="logout">Logout</option>
+              <option value="stock_count">Optælling</option>
+              <option value="user_created">Bruger oprettet</option>
+              <option value="user_updated">Bruger opdateret</option>
+              <option value="user_deleted">Bruger slettet</option>
+              <option value="password_reset">Password reset</option>
+            </select>
+            <input type="date" id="log-filter-from" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+            <input type="date" id="log-filter-to" onchange="renderActivityLogs()" style="padding: 0.5rem;">
+            <button class="btn-secondary" onclick="clearLogFilters()">Ryd filtre</button>
+          </div>
+
+          <!-- Log tabel -->
+          <div class="table-container">
+            <table id="logs-table" style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
+                  <th style="padding: 0.75rem; text-align: left;">Dato/Tid</th>
+                  <th style="padding: 0.75rem; text-align: left;">Bruger</th>
+                  <th style="padding: 0.75rem; text-align: left;">Handling</th>
+                  <th style="padding: 0.75rem; text-align: left;">Detaljer</th>
+                </tr>
+              </thead>
+              <tbody id="logs-tbody">
+                <!-- Logs indlæses her -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Password Reset Tab -->
+        <div id="admin-tab-password-reset" class="admin-tab-content" style="display: none;">
+          <h3>Password Reset</h3>
+          
+          <div style="padding: 1rem; background: #f5f5f5; border-radius: 4px; margin-bottom: 1rem;">
+            <h4>Nulstil password for bruger</h4>
+            <p style="color: #666; margin-bottom: 1rem;">Indtast email eller brugernavn for at nulstille password</p>
+            <form id="password-reset-form" onsubmit="handlePasswordReset(event); return false;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <div>
+                  <label>Email eller Brugernavn: *</label>
+                  <input type="text" id="reset-identifier" required style="width: 100%; padding: 0.5rem;" placeholder="email@example.com eller brugernavn">
+                </div>
+                <div>
+                  <label>Nyt Password: *</label>
+                  <input type="password" id="reset-new-password" required style="width: 100%; padding: 0.5rem;">
+                </div>
+              </div>
+              <button type="submit" class="btn-primary">Nulstil password</button>
+              <div id="password-reset-message" style="margin-top: 0.5rem;"></div>
+            </form>
+          </div>
+
+          <div style="padding: 1rem; background: #e3f2fd; border-radius: 4px;">
+            <h4>💡 Hjælp til glemt password</h4>
+            <p>Hvis en bruger har glemt deres password:</p>
+            <ol>
+              <li>Brugeren kan klikke på "Glemt password?" på login siden</li>
+              <li>Eller admin kan nulstille password her ved at indtaste brugerens email/brugernavn</li>
+              <li>I produktion vil der blive sendt en email med reset link</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- System Tab -->
+        <div id="admin-tab-system" class="admin-tab-content" style="display: none;">
+          <h3>System Information</h3>
+          <div style="padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <p><strong>Version:</strong> v26</p>
+            <p><strong>Backend URL:</strong> <span id="admin-api-url">-</span></p>
+            <p><strong>Nuværende bruger:</strong> <span id="admin-current-user">-</span></p>
+            <p><strong>Total brugere:</strong> <span id="admin-total-users">-</span></p>
+            <p><strong>Total log entries:</strong> <span id="admin-total-logs">-</span></p>
+            <div style="margin-top: 1rem;">
+              <button class="btn-secondary" onclick="location.reload()">Genindlæs side</button>
+              <button class="btn-secondary" onclick="exportLogs()" style="margin-left: 0.5rem;">📥 Eksporter log</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+      <script>
+        // Force reload - clear all caches
+        const CACHE_VERSION = 'v26_' + Date.now();
+        console.log('========================================');
+        console.log('=== INDEX.HTML LOADING ===');
+        console.log('Cache version:', CACHE_VERSION);
+        console.log('Timestamp:', new Date().toISOString());
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            console.log('Clearing caches:', names.length);
+            names.forEach(name => caches.delete(name));
+          });
+        }
+        console.log('Loading config.js and app.js v26...');
+        console.log('========================================');
+      </script>
+      <script src="config.js?v=29"></script>
+      <script src="auth.js?v=28"></script>
+      <script>
+        console.log('Config and auth loaded, now loading app.js...');
+        if (typeof window.CONFIG === 'undefined' && typeof CONFIG === 'undefined') {
+          console.error('ERROR: config.js ikke indlæst korrekt!');
+        } else {
+          const config = window.CONFIG || CONFIG;
+          console.log('✅ config.js indlæst korrekt, API_URL:', config.API_URL);
+        }
+        if (typeof auth === 'undefined') {
+          console.error('ERROR: auth.js ikke indlæst korrekt!');
+        } else {
+          console.log('✅ auth.js indlæst korrekt');
+        }
+      </script>
+      <script src="app.js?v=108"></script>
+    </main>
+
+    <!-- Modal for vine oversigt -->
+    <div id="vine-modal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">Vine Oversigt</h2>
+          <span class="modal-close" onclick="closeVineModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div id="modal-stats" style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+            <!-- Stats vises her -->
+          </div>
+          <div class="table-container">
+            <table id="modal-vine-table">
+              <thead>
+                <tr>
+                  <th>Navn</th>
+                  <th>Type</th>
+                  <th>Land</th>
+                  <th>Reol</th>
+                  <th>Hylde</th>
+                  <th>Antal</th>
+                  <th>Min.</th>
+                </tr>
+              </thead>
+              <tbody id="modal-vine-tbody">
+                <!-- Vine vises her -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="closeVineModal()">Luk</button>
+        </div>
+      </div>
+    </div>
+      <script>
+        console.log('All scripts should be loaded now. Check console for errors.');
+      </script>
 </body>
 </html>
